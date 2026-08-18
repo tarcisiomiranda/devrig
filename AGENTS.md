@@ -27,6 +27,7 @@ resources without reshaping the Docker layer. Linux and macOS only.
 | `internal/wait/` | readiness: TCP accept **and** a real query |
 | `internal/out/` | JSON stdout, fatal errors to stderr |
 | `skills/devrig/` | the agent skill shipped to users |
+| `scripts/install_skills.py` | detect AI agents and copy SKILL.md into their skill dirs |
 | `.github/scripts/release.py` | validate artifacts and publish the GitHub Release |
 | `releases/` | optional hand-written notes (`vX.Y.Z.yaml`) |
 
@@ -59,7 +60,13 @@ mise run build              # ./bin/devrig
 mise run release:dry        # cross-compile all targets into ./dist
 mise run release:check      # publisher unit tests + SemVer tag check
 mise run test:installer     # install.sh against a fake release (no network)
+mise run skills:list        # which AI agents are on this machine
+mise run skills:install     # copy SKILL.md into detected agent dirs
+mise run test:skills        # skill installer unit tests
 ```
+
+When editing the skill body, change `skills/devrig/SKILL.md` only, then
+`mise run skills:install` so the copies stay in sync.
 
 Integration checks need a running Docker Engine. A smoke test that must keep
 passing:

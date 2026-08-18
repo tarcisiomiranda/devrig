@@ -49,3 +49,6 @@ jobs:
 
       - name: Test installer
         run: mise run test:installer
+
+      - name: Test skill installer
+        run: mise run test:skills

@@ -1,0 +1,31 @@
+last_updated: 2026-08-18
+
+domain: skills
+description: Agent skill (SKILL.md) and installer that copies it into detected AI tools.
+
+models: []
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []
+
+skill:
+  - name: SKILL.md
+    path: skills/devrig/SKILL.md
+
+installer:
+  - name: install_skills.py
+    path: scripts/install_skills.py
+  - name: install-skills.sh
+    path: scripts/install-skills.sh
+  - name: install.sh (DEVRIG_INSTALL_SKILLS)
+    path: install.sh
