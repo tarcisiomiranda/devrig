@@ -5,11 +5,15 @@ containers through the Docker Engine API, waits until they really answer
 requests, and hands you a connection URL — then throws them away.
 
 ```bash
-devrig up myapp --db myapp_test
+devrig up postgres --name myapp --db myapp_test
 export TEST_DATABASE_URL="$(devrig url myapp)"
 # … run your tests …
 devrig down myapp
 ```
+
+The resource comes first, the instance name is optional: `devrig up postgres`
+starts one named `postgres`. Use `--name` when you want several, or a name that
+matches the project.
 
 Built for humans and for AI coding agents: every command prints JSON, instance
 names are stable, and ports are ephemeral by default so parallel projects never
@@ -80,7 +84,7 @@ mise run test
 ## Commands
 
 ```bash
-devrig up <name> [--db X] [--user U] [--password P] [--port N] [--image IMG] [--engine E]
+devrig up <resource> [--name N] [--db X] [--user U] [--password P] [--port N] [--image IMG]
 devrig url <name>          # connection URL only (for shell substitution)
 devrig status <name>       # JSON status
 devrig list                # every managed instance
@@ -96,7 +100,8 @@ recreated. If the configuration differs, the old container is replaced.
 
 - **Port is ephemeral** (`--port 0`). Always read it back with `devrig url`
   instead of hardcoding a port from a previous run.
-- **Database name** defaults to `<name>_test`. Projects with a convention
+- **Instance name** defaults to the resource name (`up postgres` → `postgres`).
+- **Database name** defaults to `<instance>_test`. Projects with a convention
   should pass `--db` explicitly (Cyber uses `cyber_<system>_test`).
 - **Credentials** are `test`/`test`. These containers bind to loopback and hold
   disposable data; do not put anything real in them.
@@ -109,6 +114,19 @@ recreated. If the configuration differs, the old container is replaced.
 It also recognises containers created by its predecessor `testpg`
 (`cyber.testpg=1`) so those can still be listed and removed. Nothing else on
 your Docker host is inspected or deleted.
+
+## Upgrading from v0.1.x
+
+`up` used to take the instance name first, with the resource in `--engine`:
+
+```bash
+devrig up myapp --engine postgres   # v0.1.x
+devrig up postgres --name myapp     # v0.2.0+
+```
+
+`--engine` was removed. Both old forms now fail with the exact replacement
+command instead of a confusing error. Everything else (`url`, `down`, `status`,
+`list`, `logs`) still takes the instance name and is unchanged.
 
 ## Relationship to `testpg`
 

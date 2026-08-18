@@ -24,13 +24,14 @@ substitution.
 ## The loop
 
 ```bash
-devrig up <name> --db <database>          # create or reuse, waits until ready
+devrig up postgres --name <name> --db <database>   # create or reuse, waits until ready
 export TEST_DATABASE_URL="$(devrig url <name>)"
 # … run the tests …
-devrig down <name>                        # idempotent
+devrig down <name>                                 # idempotent
 ```
 
-Name the instance after the project or task (`devrig up valid-vfa`), so parallel
+The **resource comes first**; `--name` is the instance. `devrig up postgres`
+alone starts one named `postgres`. Name it after the project or task so parallel
 work does not collide.
 
 ## Rules
@@ -51,7 +52,7 @@ work does not collide.
 ## Commands
 
 ```bash
-devrig up <name> [--db X] [--user U] [--password P] [--port N] [--image IMG] [--engine E]
+devrig up <resource> [--name N] [--db X] [--user U] [--password P] [--port N] [--image IMG]
 devrig url <name>          # connection URL only
 devrig status <name>       # JSON: state, ready, port, url
 devrig list                # every managed instance
@@ -66,7 +67,7 @@ the start of every test run is cheap and safe.
 ## Engines
 
 `postgres` works today. `mysql` and `mariadb` are declared but **not
-implemented** — `--engine mysql` fails with a "planned" message. Do not tell the
+implemented** — `devrig up mysql` fails with a "planned" message. Do not tell the
 user MySQL works, and do not try to work around it with a raw `docker run`;
 report the limitation.
 
@@ -79,8 +80,11 @@ code and documentation.
 ## Example: pytest with a real Postgres
 
 ```bash
-devrig up myapi --db myapi_test
+devrig up postgres --name myapi --db myapi_test
 export TEST_DATABASE_URL="$(devrig url myapi)"
 uv run pytest -q
 devrig down myapi
 ```
+
+Pre-v0.2.0 syntax (`devrig up myapi --engine postgres`) is gone; the CLI prints
+the replacement command if you try it.

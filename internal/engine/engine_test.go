@@ -54,6 +54,14 @@ func TestUnknownEngineIsNotUnsupported(t *testing.T) {
 	if errors.As(err, &unsupported) {
 		t.Fatal("unknown engine must not be reported as merely unimplemented")
 	}
+	// The CLI relies on this type to offer the pre-v0.2.0 migration hint.
+	var unknown *ErrUnknown
+	if !errors.As(err, &unknown) {
+		t.Fatalf("Lookup(\"oracle\") error = %T, want *ErrUnknown", err)
+	}
+	if unknown.Name != "oracle" {
+		t.Fatalf("ErrUnknown.Name = %q, want oracle", unknown.Name)
+	}
 }
 
 func TestKnownIncludesPlanned(t *testing.T) {

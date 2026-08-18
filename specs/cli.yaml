@@ -1,7 +1,8 @@
-last_updated: 2026-08-17
+last_updated: 2026-08-18
 
 domain: cli
 description: Cobra commands, flags, version wiring and JSON/URL output.
+# up takes the resource first since v0.2.0: `up <resource> [--name]`.
 
 models: []
 
@@ -21,7 +22,7 @@ frontend:
 commands:
   - name: devrig
     path: cmd/root.go
-  - name: up
+  - name: up <resource>
     path: cmd/root.go
   - name: down
     path: cmd/root.go
@@ -39,7 +40,10 @@ commands:
 flags:
   - name: --port
     path: cmd/root.go
-  - name: --engine
+  - name: --name
+    path: cmd/root.go
+  # --engine removed in v0.2.0; kept hidden only to print a migration error.
+  - name: --engine (removed, hidden)
     path: cmd/root.go
   - name: --user
     path: cmd/root.go

@@ -100,6 +100,14 @@ var specs = map[Name]*Spec{
 	},
 }
 
+// ErrUnknown is returned for a resource devrig has never heard of. It is a
+// distinct type so callers can tell "typo / old CLI syntax" from "planned".
+type ErrUnknown struct{ Name string }
+
+func (e *ErrUnknown) Error() string {
+	return fmt.Sprintf("unknown resource %q — known: %s", e.Name, strings.Join(Known(), ", "))
+}
+
 // ErrUnsupported is returned for engines that are declared but not built yet.
 type ErrUnsupported struct{ Name Name }
 
@@ -120,8 +128,7 @@ func Lookup(name string) (*Spec, error) {
 	}
 	spec, ok := specs[Name(strings.ToLower(strings.TrimSpace(name)))]
 	if !ok {
-		return nil, fmt.Errorf(
-			"unknown engine %q — known: %s", name, strings.Join(Known(), ", "))
+		return nil, &ErrUnknown{Name: name}
 	}
 	if !spec.Implemented {
 		return nil, &ErrUnsupported{Name: spec.Name}

@@ -3,8 +3,8 @@
 ## MySQL and MariaDB support
 
 **Status: not implemented.** Both engines are already *declared* in
-`internal/engine/engine.go` with `Implemented: false`, so `devrig up x --engine mysql`
-fails with a clear "planned" message instead of "unknown engine". The Docker layer
+`internal/engine/engine.go` with `Implemented: false`, so `devrig up mysql`
+fails with a clear "planned" message instead of "unknown resource". The Docker layer
 is engine-agnostic already — it reads image, port, env and DSN from the
 `engine.Spec`. What is missing is each engine's data plus a readiness probe.
 
@@ -53,7 +53,7 @@ MySQL branch:
 ### 3. Reuse guard — `internal/docker/client.go`
 
 `Up` reuses a running container when user/password/database/image/port match.
-Add the engine to that comparison, otherwise `up x --engine mysql` would adopt a
+Add the engine to that comparison, otherwise `up mysql --name x` would adopt a
 Postgres container that happens to carry the same name. The engine is already
 persisted in the `devrig.engine` label and surfaced in `Status.Engine`.
 
@@ -82,8 +82,8 @@ Document it in the README so nobody guesses.
 
 ### 6. Docs
 
-- README: engine table, `--engine` examples, MySQL default image and port.
-- `skills/devrig/SKILL.md`: teach agents `--engine`, and that
+- README: resource table, `devrig up mysql` examples, default image and port.
+- `skills/devrig/SKILL.md`: teach agents the new resource, and that
   `sslmode=disable` is Postgres-only (MySQL has its own TLS flags).
 
 ## Smaller items
@@ -102,10 +102,9 @@ Postgres launcher". Caches, brokers and object storage fit the same lifecycle
 
 Before adding a non-database resource, settle two things:
 
-1. **`up` argument shape.** Today it is `devrig up <instance> --engine postgres`.
-   A multi-resource tool reads better as `devrig up postgres --name <instance>`.
-   Changing it later breaks every script and doc, so decide before the first
-   release. This is the single most expensive decision left.
+1. ~~**`up` argument shape.**~~ **Settled in v0.2.0**: the resource comes first
+   (`devrig up postgres --name <instance>`), `--engine` is gone. Old invocations
+   fail with the replacement command.
 2. **What `url` means for a resource with no DSN.** Redis and Postgres both have
    URLs; MinIO has an endpoint plus credentials; Kafka has a bootstrap server.
    Either `url` stays a single string per resource, or `status` becomes the
