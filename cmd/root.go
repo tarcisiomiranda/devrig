@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	appVersion = "0.1.0"
+	appVersion = "0.1.1"
 
 	flagPort     int
 	flagUser     string

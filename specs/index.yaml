@@ -1,4 +1,4 @@
-last_updated: 2026-08-17
+last_updated: 2026-08-18
 
 domains:
   - name: cli
@@ -13,3 +13,6 @@ domains:
   - name: docker
     description: Docker Engine API client, lifecycle (up/reuse/down), readiness wait.
     path: specs/docker.yaml
+  - name: skills
+    description: Agent skill (SKILL.md) and installer for Claude, Codex, Grok and others.
+    path: specs/skills.yaml

@@ -1,0 +1,18 @@
+# Hand-written release notes for v0.1.1.
+# Used by .github/scripts/release.py for the GitHub Release body.
+
+tag: v0.1.1
+previous: v0.1.0
+
+highlights: |
+  Agent skills can be installed the same way as Stacker: detect Claude Code,
+  Codex, OpenCode, Cursor, Grok and other tools, then copy SKILL.md into
+  their skill directories.
+
+features:
+  - "**`mise run skills:install`** — detect AI agents on this machine and install `skills/devrig/SKILL.md`"
+  - "**`mise run skills:list` / `skills:install:all`** — list detected tools, or force every known path"
+  - "**`DEVRIG_INSTALL_SKILLS=1`** on `install.sh` now matches Stacker: detect by home dir and PATH binary, including Gemini, Windsurf and Continue"
+
+changes:
+  - "Canonical skill stays in `skills/devrig/SKILL.md`; `scripts/install_skills.py` is the installer"

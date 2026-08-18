@@ -142,7 +142,9 @@ main() {
     fi
 
     if is_true "${DEVRIG_INSTALL_SKILLS:-0}"; then
-        install_skill
+        install_agent_skills "$version"
+    else
+        info "AI agent skills were not installed (default). Enable with DEVRIG_INSTALL_SKILLS=1."
     fi
 
     case ":${PATH}:" in
@@ -161,25 +163,82 @@ main() {
     printf '  devrig down demo\n'
 }
 
-install_skill() {
-    local skill_url="https://raw.githubusercontent.com/${REPO}/main/skills/devrig/SKILL.md"
-    local installed=0 target
-    for target in \
-        "$HOME/.claude/skills/devrig" \
-        "$HOME/.codex/skills/devrig" \
-        "$HOME/.config/opencode/skills/devrig" \
-        "$HOME/.cursor/skills/devrig" \
-        "$HOME/.grok/skills/devrig" \
-        "$HOME/.agents/skills/devrig"; do
-        parent="$(dirname "$(dirname "$target")")"
-        [ -d "$parent" ] || continue
-        mkdir -p "$target"
-        if curl -fsSL "$skill_url" -o "${target}/SKILL.md"; then
-            info "skill installed: ${target}/SKILL.md"
-            installed=$((installed + 1))
-        fi
+# Copy skill into dest_rel/SKILL.md when the agent appears installed.
+install_skill_for_agent() {
+    local skill_src="$1" dest_rel="$2"
+    shift 2
+    local found=0 marker dest_dir
+    for marker in "$@"; do
+        case "$marker" in
+        bin:*)
+            if command -v "${marker#bin:}" >/dev/null 2>&1; then
+                found=1
+                break
+            fi
+            ;;
+        *)
+            if [ -e "${HOME}/${marker}" ]; then
+                found=1
+                break
+            fi
+            ;;
+        esac
     done
-    [ "$installed" -gt 0 ] || warn "no AI agent directories found; skill not installed"
+    [ "$found" -eq 1 ] || return 0
+    dest_dir="${HOME}/${dest_rel}"
+    mkdir -p "$dest_dir"
+    if command -v install >/dev/null 2>&1; then
+        install -m 0644 "$skill_src" "${dest_dir}/SKILL.md"
+    else
+        cp "$skill_src" "${dest_dir}/SKILL.md"
+        chmod 0644 "${dest_dir}/SKILL.md"
+    fi
+    info "skill → ${dest_dir}/SKILL.md"
+}
+
+install_agent_skills() {
+    local version="$1"
+    local skill_ref skill_url skill_path
+    if [ -z "${HOME:-}" ]; then
+        warn "HOME is not set; skipping agent skills"
+        return 0
+    fi
+    if [ "$version" = latest ]; then
+        skill_ref=main
+    else
+        skill_ref=$version
+    fi
+    skill_url="https://raw.githubusercontent.com/${REPO}/${skill_ref}/skills/devrig/SKILL.md"
+    skill_path="${tmp}/SKILL.md"
+
+    info "Installing AI agent skills (DEVRIG_INSTALL_SKILLS is enabled)..."
+    if ! curl -fsSL --retry 2 "$skill_url" -o "$skill_path"; then
+        warn "could not download skill from ${skill_url}"
+        return 0
+    fi
+    if [ ! -s "$skill_path" ]; then
+        warn "downloaded skill file is empty; skipping"
+        return 0
+    fi
+
+    install_skill_for_agent "$skill_path" ".claude/skills/devrig" \
+        ".claude" "bin:claude"
+    install_skill_for_agent "$skill_path" ".codex/skills/devrig" \
+        ".codex" "bin:codex"
+    install_skill_for_agent "$skill_path" ".config/opencode/skills/devrig" \
+        ".config/opencode" ".opencode" ".local/share/opencode" "bin:opencode"
+    install_skill_for_agent "$skill_path" ".cursor/skills/devrig" \
+        ".cursor" "bin:cursor" "bin:cursor-agent"
+    install_skill_for_agent "$skill_path" ".grok/skills/devrig" \
+        ".grok" "bin:grok"
+    install_skill_for_agent "$skill_path" ".agents/skills/devrig" \
+        ".agents"
+    install_skill_for_agent "$skill_path" ".gemini/skills/devrig" \
+        ".gemini" "bin:gemini"
+    install_skill_for_agent "$skill_path" ".continue/skills/devrig" \
+        ".continue"
+    install_skill_for_agent "$skill_path" ".codeium/windsurf/skills/devrig" \
+        ".codeium/windsurf" ".windsurf" "bin:windsurf"
 }
 
 main "$@"

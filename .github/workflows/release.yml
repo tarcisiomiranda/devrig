@@ -67,6 +67,9 @@ jobs:
       - name: Test installer
         run: mise run test:installer
 
+      - name: Test skill installer
+        run: mise run test:skills
+
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: test

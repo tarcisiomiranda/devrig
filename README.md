@@ -37,12 +37,26 @@ curl -fsSL https://raw.githubusercontent.com/tarcisiomiranda/devrig/main/install
 ```
 
 Installs to `/usr/local/bin` when writable, otherwise `~/.local/bin`, and
-verifies the release SHA-256. Also installs the agent skill on request:
+verifies the release SHA-256.
+
+**Agent skills are off by default.** To also detect AI tools on the machine
+(Claude Code, Codex, OpenCode, Cursor, Grok, …) and install the `SKILL.md`
+for them:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tarcisiomiranda/devrig/main/install.sh \
   | DEVRIG_INSTALL_SKILLS=1 bash
 ```
+
+From a git checkout, detect and install the same way Stacker does:
+
+```bash
+mise run skills:list          # which agents are present
+mise run skills:install       # detected agents only
+mise run skills:install:all   # every known tool path
+```
+
+See [skills/README.md](skills/README.md) for paths and flags.
 
 | Variable | Effect |
 | --- | --- |
