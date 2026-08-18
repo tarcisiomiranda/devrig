@@ -63,3 +63,14 @@ types:
     path: main.go
   - name: JSON / Fatal helpers
     path: internal/out/out.go
+
+decisions:
+  - what: up takes the resource first, with the instance in --name (v0.2.0).
+    why: A multi-resource tool reads as `up postgres --name x`; the old shape only made sense while Postgres was the only option.
+    path: cmd/root.go
+  - what: The removed --engine flag stays registered and hidden.
+    why: Cobra would answer "unknown flag"; keeping it lets the CLI print the exact replacement command during migration.
+    path: cmd/root.go
+  - what: Execute prints cobra-level errors before returning.
+    why: With SilenceErrors and no handler, unknown flags and bad argument counts produced no output at all, only exit 1.
+    path: cmd/root.go

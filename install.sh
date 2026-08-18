@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install devrig: throwaway databases for integration tests.
+# Install devrig: disposable dev dependencies via Docker.
 #
 #   curl -fsSL https://raw.githubusercontent.com/tarcisiomiranda/devrig/main/install.sh | bash
 #
@@ -72,9 +72,7 @@ install_dir() {
 
 verify_checksum() {
     local file="$1" sums="$2" name="$3" expected actual
-    # awk, not grep: BSD grep (macOS) has no \| alternation in BRE, and with
-    # `set -o pipefail` a non-matching grep kills the script with no message.
-    # sha256sum/shasum print "<hash>  <name>" (or "*<name>" in binary mode).
+    # BSD grep has no \| alternation; with pipefail a miss would kill the script.
     expected="$(awk -v n="$name" '$2 == n || $2 == "*" n { print $1; exit }' "$sums" 2>/dev/null || true)"
     if [ -z "$expected" ]; then
         warn "no checksum published for ${name}; skipping verification"
@@ -110,8 +108,7 @@ main() {
     info "target:   ${dir}/${BINARY}"
 
     tmp="$(mktemp -d)"
-    # Guarded: the EXIT trap may run after main()'s locals are out of scope,
-    # and `set -u` would abort on a bare "$tmp".
+    # Guarded: the trap can run after main()'s locals are gone and set -u aborts.
     trap 'rm -rf "${tmp:-}"' EXIT
 
     curl -fsSL --retry 2 "$url" -o "${tmp}/${BINARY}" ||
@@ -131,7 +128,6 @@ main() {
     fi
     info "installed ${dir}/${BINARY}"
 
-    # testpg was this tool's previous name; keep the old command working.
     if ! is_true "${DEVRIG_COMPAT_TESTPG:-1}"; then
         :
     elif [ -e "${dir}/${COMPAT_NAME}" ] && [ ! -L "${dir}/${COMPAT_NAME}" ]; then
@@ -156,14 +152,11 @@ main() {
     "${dir}/${BINARY}" version || true
     printf '\nDocker (or OrbStack/Colima) must be running. Try:\n'
     printf '  devrig up demo --db demo_test\n'
-    # SC2016: the single quotes are the point — this prints a literal snippet
-    # for the user to copy, it must not expand here.
     # shellcheck disable=SC2016
     printf '  export TEST_DATABASE_URL="$(devrig url demo)"\n'
     printf '  devrig down demo\n'
 }
 
-# Copy skill into dest_rel/SKILL.md when the agent appears installed.
 install_skill_for_agent() {
     local skill_src="$1" dest_rel="$2"
     shift 2

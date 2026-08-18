@@ -34,3 +34,12 @@ frontend:
   types:
     - name: TypeName
       path: path/to/type
+
+decisions:
+  - what: Short statement of the decision.
+    why: The reason it was made, and what breaks without it.
+    path: file/it/affects
+
+pending:
+  - what: Work that is known and not done yet.
+    path: where/it/lands

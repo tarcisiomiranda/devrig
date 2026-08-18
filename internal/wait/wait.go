@@ -1,9 +1,4 @@
-// Package wait blocks until a database container is actually usable.
-//
-// TCP accept is not enough: Postgres (and MySQL) bind the port before the
-// server finishes initialising the data directory, so a test that connects
-// on first accept gets "the database system is starting up". Every engine
-// therefore needs a query-level probe.
+// Package wait blocks until a database container answers queries.
 package wait
 
 import (
@@ -56,12 +51,6 @@ func probeTCP(ctx context.Context, addr string) error {
 	return nil
 }
 
-// probeQuery runs the engine's "are you really up?" query.
-//
-// TODO(mysql/mariadb): add a branch here using a MySQL driver (e.g.
-// github.com/go-sql-driver/mysql through database/sql) and "SELECT 1".
-// Keep the driver import out of the Postgres path so a Postgres-only build
-// stays free of MySQL dependencies.
 func probeQuery(ctx context.Context, spec *engine.Spec, url string) error {
 	switch spec.Name {
 	case engine.Postgres:
