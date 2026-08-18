@@ -38,7 +38,6 @@ func TestPlannedEnginesAreDeclaredButRefused(t *testing.T) {
 		if !errors.As(err, &unsupported) {
 			t.Fatalf("Lookup(%q) error = %v, want ErrUnsupported", name, err)
 		}
-		// The message must tell the user what does work.
 		if !strings.Contains(err.Error(), "postgres") {
 			t.Fatalf("error should mention the working engines: %v", err)
 		}
@@ -54,7 +53,6 @@ func TestUnknownEngineIsNotUnsupported(t *testing.T) {
 	if errors.As(err, &unsupported) {
 		t.Fatal("unknown engine must not be reported as merely unimplemented")
 	}
-	// The CLI relies on this type to offer the pre-v0.2.0 migration hint.
 	var unknown *ErrUnknown
 	if !errors.As(err, &unknown) {
 		t.Fatalf("Lookup(\"oracle\") error = %T, want *ErrUnknown", err)
@@ -84,7 +82,6 @@ func TestPostgresEnvAndURL(t *testing.T) {
 			t.Fatalf("env = %q, missing %q", env, want)
 		}
 	}
-	// sslmode=disable is required: local throwaway Postgres has no TLS.
 	if got := spec.URL("u", "p", "127.0.0.1", 5555, "d"); !strings.HasSuffix(got, "?sslmode=disable") {
 		t.Fatalf("URL = %q, must end with ?sslmode=disable", got)
 	}

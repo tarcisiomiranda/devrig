@@ -1,11 +1,4 @@
-// Package engine describes the databases devrig knows how to run.
-//
-// Everything database-specific lives here: the image, the port inside the
-// container, the environment the server needs, and how a connection URL is
-// built. The Docker layer stays engine-agnostic and just asks for a Spec.
-//
-// Only Postgres is implemented today. MySQL and MariaDB are declared but
-// disabled — see TODO.md for the exact work each one needs.
+// Package engine holds every database-specific detail devrig needs.
 package engine
 
 import (
@@ -29,27 +22,15 @@ const (
 type Spec struct {
 	Name Name
 
-	// DefaultImage is the container image used when --image is not given.
-	DefaultImage string
-
-	// ContainerPort is the port the server listens on inside the container.
+	DefaultImage  string
 	ContainerPort int
 
-	// DefaultUser and DefaultPassword are throwaway credentials: these
-	// containers are for tests and are never exposed beyond loopback.
 	DefaultUser     string
 	DefaultPassword string
 
-	// Env builds the container environment that creates the initial
-	// user/password/database on first boot.
 	Env func(user, password, database string) []string
-
-	// URL builds the connection string handed to callers.
 	URL func(user, password, host string, port int, database string) string
 
-	// Implemented reports whether devrig can actually start this engine.
-	// Declared-but-unimplemented engines still show up in errors and help,
-	// so users learn what is coming instead of getting "unknown engine".
 	Implemented bool
 }
 
@@ -67,8 +48,7 @@ var specs = map[Name]*Spec{
 				"POSTGRES_DB=" + database,
 			}
 		},
-		// sslmode=disable: a throwaway local Postgres has no TLS, and many
-		// drivers refuse to connect without saying so explicitly.
+		// sslmode=disable: local throwaway Postgres has no TLS.
 		URL: func(user, password, host string, port int, database string) string {
 			return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 				user, password, host, port, database)
@@ -76,9 +56,6 @@ var specs = map[Name]*Spec{
 		Implemented: true,
 	},
 
-	// TODO(mysql): implement. Needs MYSQL_ROOT_PASSWORD (or
-	// MYSQL_ALLOW_EMPTY_PASSWORD) plus MYSQL_USER/PASSWORD/DATABASE, a
-	// readiness probe that is not pgx, and a mysql:// DSN. See TODO.md.
 	MySQL: {
 		Name:            MySQL,
 		DefaultImage:    "mysql:8",
@@ -88,8 +65,6 @@ var specs = map[Name]*Spec{
 		Implemented:     false,
 	},
 
-	// TODO(mariadb): implement. Same shape as MySQL (MARIADB_* env vars are
-	// accepted by recent images, MYSQL_* still work). See TODO.md.
 	MariaDB: {
 		Name:            MariaDB,
 		DefaultImage:    "mariadb:11",
@@ -100,8 +75,7 @@ var specs = map[Name]*Spec{
 	},
 }
 
-// ErrUnknown is returned for a resource devrig has never heard of. It is a
-// distinct type so callers can tell "typo / old CLI syntax" from "planned".
+// ErrUnknown is returned for a resource devrig has never heard of.
 type ErrUnknown struct{ Name string }
 
 func (e *ErrUnknown) Error() string {

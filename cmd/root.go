@@ -41,10 +41,6 @@ func SetVersion(v string) {
 // Execute runs the root command.
 func Execute() error {
 	if err := rootCmd.Execute(); err != nil {
-		// Cobra-level failures land here: unknown flag, unknown subcommand,
-		// wrong arg count. Command bodies exit through out.Fatal, so this
-		// cannot double-print. Without it, SilenceErrors makes those failures
-		// completely silent and the user only sees exit code 1.
 		fmt.Fprintf(os.Stderr, "devrig: %v\nTry 'devrig --help'.\n", err)
 		return err
 	}
@@ -73,8 +69,7 @@ func init() {
 	upCmd.Flags().IntVar(&flagPort, "port", 0, "host port (0 = ephemeral)")
 	upCmd.Flags().StringVar(&flagName, "name", "",
 		"instance name (default: the resource name, so `up postgres` is named postgres)")
-	// Removed in v0.2.0. Accepted so the error can teach the new syntax
-	// instead of cobra's bare "unknown flag: --engine".
+	// Registered though removed in v0.2.0, so the error can name the new syntax.
 	upCmd.Flags().StringVar(&flagEngineGone, "engine", "", "")
 	_ = upCmd.Flags().MarkHidden("engine")
 	upCmd.Flags().StringVar(&flagUser, "user", "", "database user (default: test)")
@@ -122,7 +117,6 @@ var upCmd = &cobra.Command{
 		}
 		name := flagName
 		if name == "" {
-			// `devrig up postgres` is the common case: name it after the resource.
 			name = resource
 		}
 		withClient(func(ctx context.Context, c *docker.Client) error {
@@ -145,9 +139,6 @@ var upCmd = &cobra.Command{
 	},
 }
 
-// migrationHint turns "unknown resource" into migration advice. Until v0.2.0
-// the first argument was the instance name and the resource came from
-// --engine, so an unknown resource is most likely the old syntax.
 func migrationHint(resource string, err error) error {
 	var unknown *engine.ErrUnknown
 	if !errors.As(err, &unknown) {

@@ -1,4 +1,4 @@
-last_updated: 2026-08-17
+last_updated: 2026-08-18
 
 domain: docker
 description: Docker Engine API client, lifecycle (up/reuse/down), readiness wait.
@@ -51,3 +51,11 @@ readiness:
     path: internal/wait/wait.go
   - name: probePostgres
     path: internal/wait/wait.go
+
+decisions:
+  - what: Readiness requires a real query, not just a TCP accept.
+    why: Postgres binds the port before finishing initialisation, so connecting on first accept fails with "the database system is starting up".
+    path: internal/wait/wait.go
+  - what: Managed containers are discovered with two label queries instead of one.
+    why: Docker ANDs the terms in a filter set, so current and legacy label sets cannot be matched in a single call.
+    path: internal/docker/client.go

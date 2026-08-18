@@ -345,9 +345,7 @@ func (c *Client) Logs(ctx context.Context, name string, tail int) (*LogsResult, 
 	return &LogsResult{Name: name, Logs: stripDockerLogHeaders(b)}, nil
 }
 
-// listManaged returns containers created by devrig plus any left over from the
-// older testpg build. Docker ANDs filter terms, so the two label sets need
-// separate queries.
+// Docker ANDs filter terms, so current and legacy labels need separate queries.
 func (c *Client) listManaged(ctx context.Context) ([]container.Summary, error) {
 	seen := make(map[string]bool)
 	var all []container.Summary
@@ -397,8 +395,6 @@ func (c *Client) findByName(ctx context.Context, name string) (*container.Summar
 	return &list[0], nil
 }
 
-// label reads a devrig label, falling back to the equivalent label written
-// by the older testpg build.
 func label(sum *container.Summary, key, legacy string) string {
 	if v := sum.Labels[key]; v != "" {
 		return v
@@ -408,7 +404,6 @@ func label(sum *container.Summary, key, legacy string) string {
 
 func (c *Client) statusFromSummary(ctx context.Context, sum *container.Summary, probeReady bool) (*Status, error) {
 	name := label(sum, instance.LabelName, instance.LegacyLabelName)
-	// No engine label means a container from the old testpg build: Postgres.
 	spec := engine.Default()
 	if e := sum.Labels[instance.LabelEngine]; e != "" {
 		if s, err := engine.Lookup(e); err == nil {

@@ -31,3 +31,20 @@ frontend:
   hooks: []
   components: []
   types: []
+
+decisions:
+  - what: All database-specific data lives in engine.Spec; the Docker layer is engine-agnostic.
+    why: Adding an engine means adding a Spec plus a readiness probe, with no change to container lifecycle code.
+    path: internal/engine/engine.go
+  - what: Postgres URLs always carry ?sslmode=disable.
+    why: A throwaway local server has no TLS and several drivers refuse to connect without it being explicit.
+    path: internal/engine/engine.go
+  - what: MySQL and MariaDB are declared with Implemented=false instead of being absent.
+    why: Users get "planned, see TODO.md" instead of "unknown resource", and the CLI can tell a typo from a roadmap item.
+    path: internal/engine/engine.go
+
+pending:
+  - what: Implement MySQL — env vars, mysql:// DSN and a non-pgx readiness probe.
+    path: internal/engine/engine.go, internal/wait/wait.go
+  - what: Implement MariaDB — same shape as MySQL, preferring MARIADB_* env vars.
+    path: internal/engine/engine.go, internal/wait/wait.go

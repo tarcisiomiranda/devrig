@@ -17,10 +17,6 @@ const (
 	LabelPass    = "devrig.password"
 	LabelEngine  = "devrig.engine"
 
-	// Containers created by the older cyber-specs "testpg" build. Kept so
-	// list/down can still find and clean them up after the rename; devrig
-	// never creates containers with these. Reading db/user/password matters:
-	// guessing them from today's defaults would hand out a wrong URL.
 	LegacyLabelManaged = "cyber.testpg"
 	LegacyLabelName    = "cyber.testpg.name"
 	LegacyLabelDB      = "cyber.testpg.db"
@@ -30,20 +26,17 @@ const (
 
 	DefaultHost = "127.0.0.1"
 
-	// Container name prefix, also the legacy one for lookups.
 	namePrefix       = "devrig-"
 	legacyNamePrefix = "testpg-"
 )
 
-// Throwaway credentials shared by every engine: these containers bind to
-// loopback and exist only for the length of a test run.
+// Throwaway credentials shared by every engine.
 const (
 	DefaultUser     = "test"
 	DefaultPassword = "test"
 )
 
-// DefaultImage is the default engine's image; every engine carries its own
-// in its engine.Spec.
+// DefaultImage is the default engine's image.
 var DefaultImage = engine.Default().DefaultImage
 
 var nameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$`)
@@ -76,16 +69,14 @@ func SanitizeForDB(name string) string {
 	if out == "" {
 		out = "app"
 	}
-	// Postgres caps identifiers at 63 bytes; MySQL at 64. Leave room for _test.
-	const max = 48
-	if len(out) > max {
-		out = out[:max]
+	const maxIdentifierFragment = 48
+	if len(out) > maxIdentifierFragment {
+		out = out[:maxIdentifierFragment]
 	}
 	return out
 }
 
-// DefaultDatabase returns <name>_test. Projects with a naming convention
-// (e.g. Cyber's cyber_<system>_test) should pass --db explicitly.
+// DefaultDatabase returns <name>_test.
 func DefaultDatabase(name string) string {
 	return SanitizeForDB(name) + "_test"
 }
