@@ -1,0 +1,49 @@
+[tools]
+go = "1.25"
+
+[tasks.build]
+description = "Build devrig into ./bin/devrig"
+run = "mkdir -p bin && go build -o bin/devrig ."
+
+[tasks.install]
+description = "Install devrig to ~/.local/bin (plus the testpg compatibility link)"
+run = """
+set -eu
+mkdir -p bin "$HOME/.local/bin"
+go build -o bin/devrig .
+install -m 755 bin/devrig "$HOME/.local/bin/devrig"
+ln -sf "$HOME/.local/bin/devrig" "$HOME/.local/bin/testpg"
+echo "installed: $HOME/.local/bin/devrig (testpg -> devrig)"
+"$HOME/.local/bin/devrig" version
+"""
+
+[tasks.test]
+description = "Run unit tests"
+run = "go test ./..."
+
+[tasks."test:integration"]
+description = "Run integration tests (requires Docker)"
+run = "go test -tags=integration ./... -count=1"
+
+[tasks.check]
+description = "Format check, vet and unit tests"
+run = """
+set -eu
+test -z "$(gofmt -l .)" || { echo 'gofmt needed:'; gofmt -l .; exit 1; }
+go vet ./...
+go test ./...
+"""
+
+[tasks."release:dry"]
+description = "Cross-compile every release target into ./dist (no publishing)"
+run = """
+set -eu
+rm -rf dist && mkdir -p dist
+for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+  goos="${target%/*}"; goarch="${target#*/}"
+  CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+    go build -trimpath -ldflags "-s -w" -o "dist/devrig_${goos}_${goarch}" .
+  echo "built dist/devrig_${goos}_${goarch}"
+done
+ls -lh dist
+"""
