@@ -1,0 +1,15 @@
+last_updated: 2026-08-17
+
+domains:
+  - name: cli
+    description: Cobra commands, flags, version wiring and JSON/URL output.
+    path: specs/cli.yaml
+  - name: engines
+    description: Database engine specs (image, port, env, DSN) and planned engines.
+    path: specs/engines.yaml
+  - name: instances
+    description: Instance name validation, container naming, labels and legacy testpg.
+    path: specs/instances.yaml
+  - name: docker
+    description: Docker Engine API client, lifecycle (up/reuse/down), readiness wait.
+    path: specs/docker.yaml

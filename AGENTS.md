@@ -27,6 +27,8 @@ resources without reshaping the Docker layer. Linux and macOS only.
 | `internal/wait/` | readiness: TCP accept **and** a real query |
 | `internal/out/` | JSON stdout, fatal errors to stderr |
 | `skills/devrig/` | the agent skill shipped to users |
+| `.github/scripts/release.py` | validate artifacts and publish the GitHub Release |
+| `releases/` | optional hand-written notes (`vX.Y.Z.yaml`) |
 
 ## Where engine work goes
 
@@ -55,6 +57,8 @@ mise run check              # gofmt + vet + unit tests
 mise run test
 mise run build              # ./bin/devrig
 mise run release:dry        # cross-compile all targets into ./dist
+mise run release:check      # publisher unit tests + SemVer tag check
+mise run test:installer     # install.sh against a fake release (no network)
 ```
 
 Integration checks need a running Docker Engine. A smoke test that must keep

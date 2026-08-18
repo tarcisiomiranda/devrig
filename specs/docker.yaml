@@ -1,0 +1,53 @@
+last_updated: 2026-08-17
+
+domain: docker
+description: Docker Engine API client, lifecycle (up/reuse/down), readiness wait.
+
+models:
+  - name: Client
+    path: internal/docker/client.go
+  - name: Status
+    path: internal/docker/client.go
+  - name: DownResult
+    path: internal/docker/client.go
+  - name: LogsResult
+    path: internal/docker/client.go
+  - name: UpOptions
+    path: internal/docker/client.go
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []
+
+lifecycle:
+  - name: Up
+    path: internal/docker/client.go
+  - name: Down
+    path: internal/docker/client.go
+  - name: Status
+    path: internal/docker/client.go
+  - name: List
+    path: internal/docker/client.go
+  - name: URL
+    path: internal/docker/client.go
+  - name: Logs
+    path: internal/docker/client.go
+
+readiness:
+  - name: Ready
+    path: internal/wait/wait.go
+  - name: probeTCP
+    path: internal/wait/wait.go
+  - name: probeQuery
+    path: internal/wait/wait.go
+  - name: probePostgres
+    path: internal/wait/wait.go

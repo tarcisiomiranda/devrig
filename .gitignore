@@ -1,2 +1,13 @@
 /bin/
 /dist/
+/release/
+
+# Python tooling (release publisher + installer tests)
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local mise overrides
+.mise.local.toml
+
+.DS_Store

@@ -1,0 +1,19 @@
+# Hand-written release notes for v0.1.0.
+# Used by .github/scripts/release.py for the GitHub Release body.
+
+tag: v0.1.0
+
+highlights: |
+  First public release. `devrig` starts named throwaway databases through the
+  Docker Engine API, waits until they really answer, and hands back a
+  connection URL. Linux and macOS binaries ship for amd64 and arm64.
+
+features:
+  - "**Postgres** — `devrig up <name>` starts a disposable instance; ports are ephemeral unless `--port` is set"
+  - "**`devrig url`** — prints a bare `postgres://…?sslmode=disable` string for `$(devrig url x)`"
+  - "**Idempotent `up`/`down`** — a matching running instance is reused; `down` on a missing name succeeds"
+  - "**JSON output** on every command except `url`"
+  - "**Legacy `testpg`** — old containers stay listable and removable; the installer links `testpg` → `devrig`"
+
+changes:
+  - "MySQL and MariaDB are declared but not implemented — they fail with a planned-engine error"
