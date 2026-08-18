@@ -5,14 +5,20 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  MISE_PYTHON_COMPILE: "false"
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+
+      - name: Install tools
+        uses: jdx/mise-action@v4
         with:
-          go-version-file: go.mod
+          install_args: "go python shellcheck"
+          cache: true
 
       - name: gofmt
         run: |
@@ -21,21 +27,25 @@ jobs:
             echo "gofmt needed:"; echo "$unformatted"; exit 1
           fi
 
-      - run: go vet ./...
-      - run: go test ./... -count=1
+      - run: mise exec -- go vet ./...
+      - run: mise run test
 
       # The release builds these four; a broken cross-compile should fail here,
       # not when someone is cutting a tag.
       - name: Cross-compile release targets
         run: |
+          mkdir -p dist
           for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             CGO_ENABLED=0 GOOS="${t%/*}" GOARCH="${t#*/}" \
-              go build -trimpath -o /dev/null .
+              mise exec -- go build -trimpath -o "dist/devrig_${t%/*}_${t#*/}" .
             echo "ok $t"
           done
 
-      - name: Shell check install.sh
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          bash -n install.sh
-          shellcheck install.sh
+      - name: Test release publisher
+        run: mise run release:check
+
+      - name: Lint shell scripts
+        run: mise run lint:shell
+
+      - name: Test installer
+        run: mise run test:installer

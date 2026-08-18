@@ -1,0 +1,31 @@
+last_updated: 2026-08-17
+
+domain: engines
+description: Database engine specs (image, port, env, DSN) and planned engines.
+
+models:
+  - name: Name
+    path: internal/engine/engine.go
+  - name: Spec
+    path: internal/engine/engine.go
+  - name: ErrUnsupported
+    path: internal/engine/engine.go
+  - name: Postgres
+    path: internal/engine/engine.go
+  - name: MySQL
+    path: internal/engine/engine.go
+  - name: MariaDB
+    path: internal/engine/engine.go
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []

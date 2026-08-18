@@ -1,0 +1,61 @@
+last_updated: 2026-08-17
+
+domain: cli
+description: Cobra commands, flags, version wiring and JSON/URL output.
+
+models: []
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []
+
+commands:
+  - name: devrig
+    path: cmd/root.go
+  - name: up
+    path: cmd/root.go
+  - name: down
+    path: cmd/root.go
+  - name: status
+    path: cmd/root.go
+  - name: list
+    path: cmd/root.go
+  - name: url
+    path: cmd/root.go
+  - name: logs
+    path: cmd/root.go
+  - name: version
+    path: cmd/root.go
+
+flags:
+  - name: --port
+    path: cmd/root.go
+  - name: --engine
+    path: cmd/root.go
+  - name: --user
+    path: cmd/root.go
+  - name: --password
+    path: cmd/root.go
+  - name: --db
+    path: cmd/root.go
+  - name: --image
+    path: cmd/root.go
+  - name: --timeout
+    path: cmd/root.go
+  - name: --tail
+    path: cmd/root.go
+
+types:
+  - name: version (ldflags main.version)
+    path: main.go
+  - name: JSON / Fatal helpers
+    path: internal/out/out.go

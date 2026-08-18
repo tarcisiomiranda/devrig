@@ -114,22 +114,36 @@ MIT.
 ## Releasing
 
 Binaries are built by GitHub Actions on tag push — nothing is uploaded from a
-laptop, so what users download is what CI built.
+laptop, so what users download is what CI built. The pipeline matches Stacker:
+test → matrix build of four targets → checksums → publish.
 
 ```bash
-# 1. make sure CI is green on main, then tag
+# 1. write releases/vX.Y.Z.yaml (see releases/README.md)
+# 2. make sure CI is green on main, then tag
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin main
 git push origin v0.1.0
 ```
 
-The workflow runs `go vet` + tests, cross-compiles `linux/{amd64,arm64}` and
-`darwin/{amd64,arm64}` with `CGO_ENABLED=0`, writes `checksums.txt`, and
-publishes the release with `gh` (no third-party actions).
+The Release workflow:
+
+1. Runs unit tests, `go vet`, `release:check`, `install.sh` and shellcheck.
+2. Cross-compiles `linux/{amd64,arm64}` and `darwin/{amd64,arm64}` with
+   `CGO_ENABLED=0`, stamping `-X main.version=<tag>`.
+3. Writes a single `checksums.txt` and publishes the GitHub Release via
+   `.github/scripts/release.py`.
 
 If the tag lands but Actions does not start (a missed tag webhook), use
-**Actions → Release → Run workflow** and pass the tag; the same `tag` input
-drives the binary version stamp and the release name.
+**Actions → Release → Run workflow** and pass the tag; `RELEASE_TAG` drives
+both the binary version stamp and the release name.
 
 Assets follow `devrig_<os>_<arch>`, which is exactly what `install.sh` resolves
 from `uname`. Changing one without the other breaks installation.
+
+Local dry-run (no publish):
+
+```bash
+mise run release:dry     # four binaries in ./dist
+mise run release:check   # publisher unit tests
+mise run test:installer  # install.sh against a fake release
+```

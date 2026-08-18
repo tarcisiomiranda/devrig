@@ -1,0 +1,35 @@
+last_updated: 2026-08-17
+
+domain: instances
+description: Instance name validation, container naming, labels and legacy testpg.
+
+models:
+  - name: ValidateName
+    path: internal/instance/name.go
+  - name: SanitizeForDB
+    path: internal/instance/name.go
+  - name: DefaultDatabase
+    path: internal/instance/name.go
+  - name: ContainerName
+    path: internal/instance/name.go
+  - name: LegacyContainerName
+    path: internal/instance/name.go
+  - name: URL
+    path: internal/instance/name.go
+  - name: LabelManaged
+    path: internal/instance/name.go
+  - name: LegacyLabelManaged
+    path: internal/instance/name.go
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []
