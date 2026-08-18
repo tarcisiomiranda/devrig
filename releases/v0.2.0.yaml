@@ -1,0 +1,39 @@
+# Hand-written release notes for v0.2.0.
+# Used by .github/scripts/release.py for the GitHub Release body.
+
+tag: v0.2.0
+previous: v0.1.1
+
+highlights: |
+  **Breaking:** `up` now takes the resource first — `devrig up postgres --name myapp`
+  instead of `devrig up myapp --engine postgres`. The old shape only made sense
+  while Postgres was the only thing devrig could run; with MySQL and MariaDB on
+  the way, the resource belongs in the argument and the instance in `--name`.
+
+  Old invocations do not fail cryptically: they print the exact replacement
+  command. Everything except `up` is unchanged.
+
+  ```bash
+  devrig up myapp --engine postgres   # v0.1.x
+  devrig up postgres --name myapp     # v0.2.0+
+  ```
+
+  `url`, `down`, `status`, `list` and `logs` still take the instance name and
+  need no change. Containers created by v0.1.x keep working — same
+  `devrig.managed=1` label.
+
+breaking:
+  - "**`up <resource>`** — the first argument is the resource (`postgres`), not the instance name"
+  - "**`--engine` removed** — use the positional argument; passing `--engine` prints the replacement command"
+
+features:
+  - "**`--name`** — instance name, defaulting to the resource, so `devrig up postgres` just works"
+  - "**Several instances per resource** — `up postgres --name a` and `--name b` coexist, each on its own ephemeral port"
+  - "**Migration errors that teach** — an unknown resource suggests `devrig up postgres --name <it>` instead of only listing valid resources"
+
+fixes:
+  - "**Cobra errors are no longer silent** — unknown flags, unknown subcommands and wrong argument counts printed nothing at all (only exit 1) because `SilenceErrors` had no matching handler; they now report to stderr with a `--help` pointer"
+
+changes:
+  - "`engine.ErrUnknown` is a distinct error type, so the CLI can tell a typo/old-syntax call from a resource that is declared but not implemented yet"
+  - "`up --help` documents both forms; `specs/cli.yaml` records the new surface"

@@ -44,6 +44,8 @@ MySQL and MariaDB are declared with `Implemented: false` and fail with a clear
 
 - Postgres URLs end with `?sslmode=disable`.
 - Ports are ephemeral unless `--port` is given.
+- `up <resource>` takes the resource first; `--name` picks the instance
+  (default: the resource name). `--engine` was removed in v0.2.0.
 - `up` is idempotent: a matching running instance is reused.
 - `down` on a missing instance succeeds (`removed: false, state: absent`).
 - Every command emits JSON except `url`, which prints a bare string so
@@ -72,7 +74,7 @@ Integration checks need a running Docker Engine. A smoke test that must keep
 passing:
 
 ```bash
-./bin/devrig up smoke --db smoke_test
+./bin/devrig up postgres --name smoke --db smoke_test
 ./bin/devrig url smoke
 ./bin/devrig down smoke
 ```

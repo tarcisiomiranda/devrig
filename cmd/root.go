@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"errors"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,14 +20,15 @@ import (
 var (
 	appVersion = "0.1.1"
 
-	flagPort     int
-	flagUser     string
-	flagPassword string
-	flagDB       string
-	flagImage    string
-	flagTimeout  time.Duration
-	flagTail     int
-	flagEngine   string
+	flagPort       int
+	flagUser       string
+	flagPassword   string
+	flagDB         string
+	flagImage      string
+	flagTimeout    time.Duration
+	flagTail       int
+	flagName       string
+	flagEngineGone string
 )
 
 // SetVersion sets the binary version string.
@@ -38,15 +40,23 @@ func SetVersion(v string) {
 
 // Execute runs the root command.
 func Execute() error {
-	return rootCmd.Execute()
+	if err := rootCmd.Execute(); err != nil {
+		// Cobra-level failures land here: unknown flag, unknown subcommand,
+		// wrong arg count. Command bodies exit through out.Fatal, so this
+		// cannot double-print. Without it, SilenceErrors makes those failures
+		// completely silent and the user only sees exit code 1.
+		fmt.Fprintf(os.Stderr, "devrig: %v\nTry 'devrig --help'.\n", err)
+		return err
+	}
+	return nil
 }
 
 var rootCmd = &cobra.Command{
 	Use:   "devrig",
-	Short: "Manage throwaway databases for integration tests",
-	Long: "devrig creates named database containers via the Docker Engine API for\n" +
-		"local/integration tests (Linux + macOS).\n\n" +
-		"Engines: postgres (ready). mysql and mariadb are planned — see TODO.md.",
+	Short: "Run disposable dev dependencies in Docker",
+	Long: "devrig starts named containers for the dependencies a dev loop needs,\n" +
+		"through the Docker Engine API (Linux + macOS).\n\n" +
+		"Resources: postgres (ready). mysql and mariadb are planned — see TODO.md.",
 	SilenceErrors: true,
 	SilenceUsage:  true,
 }
@@ -61,8 +71,12 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	upCmd.Flags().IntVar(&flagPort, "port", 0, "host port (0 = ephemeral)")
-	upCmd.Flags().StringVar(&flagEngine, "engine", string(engine.Postgres),
-		"database engine: "+strings.Join(engine.Known(), ", ")+" (implemented: "+strings.Join(engine.Implemented(), ", ")+")")
+	upCmd.Flags().StringVar(&flagName, "name", "",
+		"instance name (default: the resource name, so `up postgres` is named postgres)")
+	// Removed in v0.2.0. Accepted so the error can teach the new syntax
+	// instead of cobra's bare "unknown flag: --engine".
+	upCmd.Flags().StringVar(&flagEngineGone, "engine", "", "")
+	_ = upCmd.Flags().MarkHidden("engine")
 	upCmd.Flags().StringVar(&flagUser, "user", "", "database user (default: test)")
 	upCmd.Flags().StringVar(&flagPassword, "password", "", "database password (default: test)")
 	upCmd.Flags().StringVar(&flagDB, "db", "", "database name (default: <name>_test)")
@@ -88,17 +102,32 @@ func withClient(fn func(ctx context.Context, c *docker.Client) error) {
 }
 
 var upCmd = &cobra.Command{
-	Use:   "up <name>",
-	Short: "Create or reuse a named database instance (JSON)",
-	Args:  cobra.ExactArgs(1),
+	Use:   "up <resource>",
+	Short: "Create or reuse a named instance of a resource (JSON)",
+	Long: "Start a resource and wait until it answers queries.\n\n" +
+		"  devrig up postgres                  # instance named \"postgres\"\n" +
+		"  devrig up postgres --name valid-vfa # several instances of one resource\n\n" +
+		"Resources: " + strings.Join(engine.Known(), ", ") +
+		" (implemented: " + strings.Join(engine.Implemented(), ", ") + ")",
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		spec, err := engine.Lookup(flagEngine)
+		resource := args[0]
+		if flagEngineGone != "" {
+			out.Fatalf("--engine was removed in v0.2.0: the resource comes first now\n"+
+				"  devrig up %s --name %s", flagEngineGone, resource)
+		}
+		spec, err := engine.Lookup(resource)
 		if err != nil {
-			out.Fatal(err)
+			out.Fatal(migrationHint(resource, err))
+		}
+		name := flagName
+		if name == "" {
+			// `devrig up postgres` is the common case: name it after the resource.
+			name = resource
 		}
 		withClient(func(ctx context.Context, c *docker.Client) error {
 			st, err := c.Up(ctx, docker.UpOptions{
-				Name:     args[0],
+				Name:     name,
 				Engine:   spec,
 				User:     flagUser,
 				Password: flagPassword,
@@ -114,6 +143,19 @@ var upCmd = &cobra.Command{
 			return nil
 		})
 	},
+}
+
+// migrationHint turns "unknown resource" into migration advice. Until v0.2.0
+// the first argument was the instance name and the resource came from
+// --engine, so an unknown resource is most likely the old syntax.
+func migrationHint(resource string, err error) error {
+	var unknown *engine.ErrUnknown
+	if !errors.As(err, &unknown) {
+		return err // declared-but-unimplemented resource: the message already fits
+	}
+	return fmt.Errorf("%w\n\n"+
+		"devrig up now takes the resource first. If %[2]q is an instance name:\n"+
+		"  devrig up postgres --name %[2]s", err, resource)
 }
 
 var downCmd = &cobra.Command{
