@@ -1,4 +1,4 @@
-last_updated: 2026-08-18
+last_updated: 2026-08-25
 
 domain: instances
 description: Instance name validation, container naming, labels and legacy testpg.
@@ -17,6 +17,8 @@ models:
   - name: URL
     path: internal/instance/name.go
   - name: LabelManaged
+    path: internal/instance/name.go
+  - name: LabelContainerPort
     path: internal/instance/name.go
   - name: LegacyLabelManaged
     path: internal/instance/name.go
@@ -37,6 +39,9 @@ frontend:
 decisions:
   - what: Legacy cyber.testpg.* labels are read, never guessed from current defaults.
     why: The old build stored its own database name; deriving it from the instance name hands out a URL pointing at a database that does not exist.
+    path: internal/instance/name.go, internal/docker/client.go
+  - what: The container port is stored in the devrig.container_port label.
+    why: status/url read a container back from its labels; re-deriving the port from the engine spec would contradict a --container-port override and find no binding. Containers without the label fall back to the engine default, which keeps legacy testpg ones working.
     path: internal/instance/name.go, internal/docker/client.go
   - what: Sanitized identifiers are capped at 48 characters.
     why: Postgres caps identifiers at 63 bytes and MySQL at 64; the cap leaves room for the _test suffix.

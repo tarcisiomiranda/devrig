@@ -1,4 +1,4 @@
-last_updated: 2026-08-18
+last_updated: 2026-08-25
 
 domain: docker
 description: Docker Engine API client, lifecycle (up/reuse/down), readiness wait.
@@ -56,6 +56,12 @@ decisions:
   - what: Readiness requires a real query, not just a TCP accept.
     why: Postgres binds the port before finishing initialisation, so connecting on first accept fails with "the database system is starting up".
     path: internal/wait/wait.go
+  - what: publishedPort takes the container port as an argument instead of assuming 5432.
+    why: It read NetworkSettings.Ports["5432/tcp"] while the container was created from the engine spec's port, so any engine off 5432 would have been created correctly and then reported as "not published" by up, status, url, list and logs.
+    path: internal/docker/client.go
+  - what: An overridden container port that never answers gets an explicit hint.
+    why: --container-port on a stock image produces a readiness timeout that looks like a broken database rather than a misconfigured port.
+    path: internal/docker/client.go
   - what: Managed containers are discovered with two label queries instead of one.
     why: Docker ANDs the terms in a filter set, so current and legacy label sets cannot be matched in a single call.
     path: internal/docker/client.go

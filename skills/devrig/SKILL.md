@@ -37,7 +37,8 @@ work does not collide.
 ## Rules
 
 1. **Never hardcode the port.** It is ephemeral by design. Always read it back
-   with `devrig url <name>`.
+   with `devrig url <name>`. `--port` picks the host port; leave
+   `--container-port` alone unless a custom `--image` listens off the default.
 2. **Postgres DSNs need `?sslmode=disable`.** `devrig url` already includes it.
    If you ever build a local DSN by hand, keep it — drivers fail on a local
    server without TLS otherwise.
@@ -53,6 +54,7 @@ work does not collide.
 
 ```bash
 devrig up <resource> [--name N] [--db X] [--user U] [--password P] [--port N] [--image IMG]
+devrig up <resource> --container-port N   # only for an --image that listens off the engine default
 devrig url <name>          # connection URL only
 devrig status <name>       # JSON: state, ready, port, url
 devrig list                # every managed instance

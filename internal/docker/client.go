@@ -66,6 +66,7 @@ type Status struct {
 	Ready         bool   `json:"ready"`
 	Host          string `json:"host"`
 	Port          int    `json:"port,omitempty"`
+	ContainerPort int    `json:"container_port,omitempty"`
 	User          string `json:"user"`
 	Password      string `json:"password"`
 	Database      string `json:"database"`
@@ -88,14 +89,15 @@ type LogsResult struct {
 
 // UpOptions configures a new instance.
 type UpOptions struct {
-	Name     string
-	Engine   *engine.Spec
-	User     string
-	Password string
-	Database string
-	Image    string
-	Port     int // 0 = ephemeral
-	Timeout  time.Duration
+	Name          string
+	Engine        *engine.Spec
+	User          string
+	Password      string
+	Database      string
+	Image         string
+	Port          int // 0 = ephemeral host port
+	ContainerPort int // 0 = the port the engine spec declares
+	Timeout       time.Duration
 }
 
 // Up creates or reuses a ready database instance.
@@ -118,6 +120,7 @@ func (c *Client) Up(ctx context.Context, opt UpOptions) (*Status, error) {
 	if opt.Image == "" {
 		opt.Image = opt.Engine.DefaultImage
 	}
+	opt.ContainerPort = resolveContainerPort(opt.ContainerPort, opt.Engine.ContainerPort)
 	if opt.Timeout <= 0 {
 		opt.Timeout = 30 * time.Second
 	}
@@ -131,6 +134,7 @@ func (c *Client) Up(ctx context.Context, opt UpOptions) (*Status, error) {
 		if err == nil && st.Ready && st.State == "running" {
 			if st.User == opt.User && st.Password == opt.Password &&
 				st.Database == opt.Database && st.Image == opt.Image &&
+				st.ContainerPort == opt.ContainerPort &&
 				(opt.Port == 0 || st.Port == opt.Port) {
 				return st, nil
 			}
@@ -153,6 +157,9 @@ func (c *Client) Up(ctx context.Context, opt UpOptions) (*Status, error) {
 		instance.LabelImage:   opt.Image,
 		instance.LabelPass:    opt.Password,
 		instance.LabelEngine:  opt.Engine.Name.String(),
+		// Persisted so status/url can find the binding without re-deriving it
+		// from the engine spec, which a --container-port override contradicts.
+		instance.LabelContainerPort: strconv.Itoa(opt.ContainerPort),
 	}
 
 	hostPort := ""
@@ -160,7 +167,7 @@ func (c *Client) Up(ctx context.Context, opt UpOptions) (*Status, error) {
 		hostPort = strconv.Itoa(opt.Port)
 	}
 
-	containerPort := nat.Port(strconv.Itoa(opt.Engine.ContainerPort) + "/tcp")
+	containerPort := portKey(opt.ContainerPort)
 	cfg := &container.Config{
 		Image:  opt.Image,
 		Env:    opt.Engine.Env(opt.User, opt.Password, opt.Database),
@@ -196,9 +203,18 @@ func (c *Client) Up(ctx context.Context, opt UpOptions) (*Status, error) {
 	st, err := c.waitReady(wctx, create.ID, opt)
 	if err != nil {
 		_ = c.removeContainer(context.Background(), create.ID)
-		return nil, err
+		return nil, containerPortHint(err, opt)
 	}
 	return st, nil
+}
+
+// containerPortHint names the likeliest cause when an overridden container port never answers.
+func containerPortHint(err error, opt UpOptions) error {
+	if err == nil || opt.ContainerPort == opt.Engine.ContainerPort {
+		return err
+	}
+	return fmt.Errorf("%w\nhint: --container-port %d requires an image that listens there; %s listens on %d by default",
+		err, opt.ContainerPort, opt.Image, opt.Engine.ContainerPort)
 }
 
 func (c *Client) waitReady(ctx context.Context, id string, opt UpOptions) (*Status, error) {
@@ -221,7 +237,7 @@ func (c *Client) waitReady(ctx context.Context, id string, opt UpOptions) (*Stat
 				continue
 			}
 		}
-		port, err := publishedPort(insp)
+		port, err := publishedPort(insp, opt.ContainerPort)
 		if err != nil {
 			select {
 			case <-ctx.Done():
@@ -243,6 +259,7 @@ func (c *Client) waitReady(ctx context.Context, id string, opt UpOptions) (*Stat
 			Ready:         true,
 			Host:          instance.DefaultHost,
 			Port:          port,
+			ContainerPort: opt.ContainerPort,
 			User:          opt.User,
 			Password:      opt.Password,
 			Database:      opt.Database,
@@ -426,6 +443,12 @@ func (c *Client) statusFromSummary(ctx context.Context, sum *container.Summary, 
 	if img == "" {
 		img = sum.Image
 	}
+	cport := spec.ContainerPort
+	if v := sum.Labels[instance.LabelContainerPort]; v != "" {
+		if p, err := strconv.Atoi(v); err == nil && p > 0 {
+			cport = p
+		}
+	}
 
 	st := &Status{
 		Name:          name,
@@ -438,6 +461,7 @@ func (c *Client) statusFromSummary(ctx context.Context, sum *container.Summary, 
 		Database:      db,
 		Image:         img,
 		Host:          instance.DefaultHost,
+		ContainerPort: cport,
 	}
 	if len(sum.Names) > 0 {
 		st.ContainerName = strings.TrimPrefix(sum.Names[0], "/")
@@ -448,7 +472,7 @@ func (c *Client) statusFromSummary(ctx context.Context, sum *container.Summary, 
 		return st, nil
 	}
 	st.State = insp.State.Status
-	if port, err := publishedPort(insp); err == nil {
+	if port, err := publishedPort(insp, cport); err == nil {
 		st.Port = port
 		st.URL = instance.URL(spec, user, pass, instance.DefaultHost, port, db)
 		if probeReady && insp.State.Running {
@@ -487,13 +511,26 @@ func (c *Client) ensureImage(ctx context.Context, ref string) error {
 	return nil
 }
 
-func publishedPort(insp container.InspectResponse) (int, error) {
+func portKey(containerPort int) nat.Port {
+	return nat.Port(strconv.Itoa(containerPort) + "/tcp")
+}
+
+// resolveContainerPort applies the --container-port override over the engine default.
+func resolveContainerPort(override, engineDefault int) int {
+	if override > 0 {
+		return override
+	}
+	return engineDefault
+}
+
+func publishedPort(insp container.InspectResponse, containerPort int) (int, error) {
 	if insp.NetworkSettings == nil {
 		return 0, fmt.Errorf("no network settings")
 	}
-	bindings, ok := insp.NetworkSettings.Ports["5432/tcp"]
+	key := portKey(containerPort)
+	bindings, ok := insp.NetworkSettings.Ports[key]
 	if !ok || len(bindings) == 0 {
-		return 0, fmt.Errorf("port 5432/tcp not published")
+		return 0, fmt.Errorf("port %s not published", key)
 	}
 	for _, b := range bindings {
 		if b.HostIP == "" || b.HostIP == "0.0.0.0" || b.HostIP == "127.0.0.1" || b.HostIP == "::" {

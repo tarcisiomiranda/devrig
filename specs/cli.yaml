@@ -1,4 +1,4 @@
-last_updated: 2026-08-18
+last_updated: 2026-08-25
 
 domain: cli
 description: Cobra commands, flags, version wiring and JSON/URL output.
@@ -40,6 +40,8 @@ commands:
 flags:
   - name: --port
     path: cmd/root.go
+  - name: --container-port
+    path: cmd/root.go
   - name: --name
     path: cmd/root.go
   # --engine removed in v0.2.0; kept hidden only to print a migration error.
@@ -71,6 +73,9 @@ decisions:
   - what: The removed --engine flag stays registered and hidden.
     why: Cobra would answer "unknown flag"; keeping it lets the CLI print the exact replacement command during migration.
     path: cmd/root.go
+  - what: --port and --container-port are separate flags, host side and container side.
+    why: One flag cannot mean both; the host port is what callers connect to, the container port is what the image listens on, and only the second one has to match the engine.
+    path: cmd/root.go, internal/docker/client.go
   - what: Execute prints cobra-level errors before returning.
     why: With SilenceErrors and no handler, unknown flags and bad argument counts produced no output at all, only exit 1.
     path: cmd/root.go

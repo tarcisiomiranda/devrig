@@ -84,7 +84,7 @@ mise run test
 ## Commands
 
 ```bash
-devrig up <resource> [--name N] [--db X] [--user U] [--password P] [--port N] [--image IMG]
+devrig up <resource> [--name N] [--db X] [--user U] [--password P] [--port N] [--container-port N] [--image IMG]
 devrig url <name>          # connection URL only (for shell substitution)
 devrig status <name>       # JSON status
 devrig list                # every managed instance
@@ -100,6 +100,11 @@ recreated. If the configuration differs, the old container is replaced.
 
 - **Port is ephemeral** (`--port 0`). Always read it back with `devrig url`
   instead of hardcoding a port from a previous run.
+- **`--port` is the host side; `--container-port` is the port inside the
+  container.** The container port defaults to the engine's (5432 for Postgres)
+  and only needs overriding for an `--image` that listens somewhere else. Set it
+  on a stock image and the instance never becomes ready — `up` says so and names
+  the port it expected.
 - **Instance name** defaults to the resource name (`up postgres` → `postgres`).
 - **Database name** defaults to `<instance>_test`. Projects with a convention
   should pass `--db` explicitly (Cyber uses `cyber_<system>_test`).

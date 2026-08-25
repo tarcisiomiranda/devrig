@@ -20,7 +20,9 @@ import (
 var (
 	appVersion = "0.1.1"
 
-	flagPort       int
+	flagPort          int
+	flagContainerPort int
+
 	flagUser       string
 	flagPassword   string
 	flagDB         string
@@ -67,6 +69,8 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	upCmd.Flags().IntVar(&flagPort, "port", 0, "host port (0 = ephemeral)")
+	upCmd.Flags().IntVar(&flagContainerPort, "container-port", 0,
+		"port the resource listens on inside the container (default: the engine's; needs an --image that actually listens there)")
 	upCmd.Flags().StringVar(&flagName, "name", "",
 		"instance name (default: the resource name, so `up postgres` is named postgres)")
 	// Registered though removed in v0.2.0, so the error can name the new syntax.
@@ -121,14 +125,15 @@ var upCmd = &cobra.Command{
 		}
 		withClient(func(ctx context.Context, c *docker.Client) error {
 			st, err := c.Up(ctx, docker.UpOptions{
-				Name:     name,
-				Engine:   spec,
-				User:     flagUser,
-				Password: flagPassword,
-				Database: flagDB,
-				Image:    flagImage,
-				Port:     flagPort,
-				Timeout:  flagTimeout,
+				Name:          name,
+				Engine:        spec,
+				User:          flagUser,
+				Password:      flagPassword,
+				Database:      flagDB,
+				Image:         flagImage,
+				Port:          flagPort,
+				ContainerPort: flagContainerPort,
+				Timeout:       flagTimeout,
 			})
 			if err != nil {
 				return err

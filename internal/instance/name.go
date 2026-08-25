@@ -17,6 +17,8 @@ const (
 	LabelPass    = "devrig.password"
 	LabelEngine  = "devrig.engine"
 
+	LabelContainerPort = "devrig.container_port"
+
 	LegacyLabelManaged = "cyber.testpg"
 	LegacyLabelName    = "cyber.testpg.name"
 	LegacyLabelDB      = "cyber.testpg.db"
