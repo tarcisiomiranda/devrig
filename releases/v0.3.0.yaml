@@ -1,0 +1,38 @@
+# Hand-written release notes for v0.3.0.
+# Used by .github/scripts/release.py for the GitHub Release body.
+
+tag: v0.3.0
+previous: v0.2.1
+
+highlights: |
+  A port bug that Postgres was hiding, and the flag that came out of fixing it.
+
+  devrig created the container from the engine spec's port but read the
+  published binding back from a hardcoded `5432/tcp`. Postgres never noticed.
+  Anything else — MySQL on 3306, a custom image on 6432 — would have been
+  created on the right port and then reported as "port 5432/tcp not published"
+  by `up`, `status`, `url`, `list` and `logs`.
+
+  The lookup now follows the engine, and `--container-port` points it elsewhere
+  for an image that does not listen on the default:
+
+  ```bash
+  devrig up postgres --name myapp                        # unchanged
+  devrig up postgres --name myapp --container-port 6432  # custom --image
+  ```
+
+  Existing instances are unaffected — `up`, `status` and `list` simply carry an
+  extra `container_port` field.
+
+features:
+  - "**`--container-port N`** — the port the resource listens on *inside* the container, for a custom `--image` that does not use the engine default. `--port` still picks the host side."
+  - "**`container_port` in the JSON** of `up`, `status` and `list`"
+  - "**A readiness timeout that explains itself** — `--container-port` against a stock image used to look like a broken database; `up` now names the port the image actually listens on"
+
+fixes:
+  - "**Port lookup no longer assumes Postgres** — the published-port read was hardcoded to `5432/tcp`, so any engine off 5432 would have been created on the right port and then reported as unpublished by every command that reads an instance back"
+  - "**`up` reuse compares the container port** — without it, `up --container-port X` could adopt a running instance listening somewhere else"
+
+changes:
+  - "The container port is persisted in a `devrig.container_port` label, so `status` and `url` read it back instead of re-deriving it from the engine spec; containers without the label fall back to the engine default, which keeps legacy `testpg` instances working"
+  - "`internal/docker` gained its first unit tests, covering the port lookup across 5432, 3306 and a custom port"
