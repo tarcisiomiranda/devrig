@@ -1,0 +1,113 @@
+last_updated: 2026-09-05
+
+domain: kube
+description: Kubernetes backend — pods created through kubectl plus a detached port-forward.
+
+models:
+  - name: Options
+    path: internal/kube/kubectl.go
+  - name: Client
+    path: internal/kube/client.go
+  - name: runner / execRunner
+    path: internal/kube/kubectl.go
+  - name: pod / podList
+    path: internal/kube/pod.go
+  - name: forward
+    path: internal/kube/forward.go
+  - name: podSpec / manifest
+    path: internal/kube/manifest.go
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []
+
+lifecycle:
+  - name: New (probes the cluster, resolves context and namespace)
+    path: internal/kube/client.go
+  - name: Up
+    path: internal/kube/client.go
+  - name: Down
+    path: internal/kube/client.go
+  - name: Status
+    path: internal/kube/client.go
+  - name: List
+    path: internal/kube/client.go
+  - name: URL
+    path: internal/kube/client.go
+  - name: Logs
+    path: internal/kube/client.go
+
+readiness:
+  - name: readinessProbe (tcpSocket on the engine port)
+    path: internal/kube/manifest.go
+  - name: waitRunning
+    path: internal/kube/client.go
+  - name: readyStatus (forward + wait.Ready, with reconnect)
+    path: internal/kube/client.go
+  - name: ensureForward / liveForward / awaitForwardPort
+    path: internal/kube/forward.go
+
+decisions:
+  - what: The cluster is driven by the kubectl binary, not client-go.
+    why: Target hosts already have kubectl with working contexts and exec auth
+      plugins (GKE gcloud, OIDC); client-go would re-implement that and add a
+      huge dependency. kubectl is also the only thing guaranteed on a jump box.
+    path: internal/kube/kubectl.go
+  - what: Connectivity is a port-forward, not a NodePort or a Service.
+    why: It needs only pods/portforward, behaves the same on k3s on-prem and on
+      GKE with private nodes, and keeps the URL on 127.0.0.1 so the readiness
+      probes and DSN builders shared with the Docker backend work unchanged.
+    path: internal/kube/forward.go
+  - what: The forward is detached (setsid) and its pid and port live in a state file.
+    why: >-
+      `devrig up` returns and exits while the tunnel has to stay up for the
+      whole test run; down kills the process group and removes the file.
+    path: internal/kube/forward.go, internal/kube/proc_unix.go
+  - what: The local port is read out of kubectl's own "Forwarding from" line.
+    why: Asking kubectl for an ephemeral port and parsing what it published has
+      no race; picking a free port first and passing it can lose it in between.
+    path: internal/kube/forward.go
+  - what: The pod carries a TCP readiness probe on the engine port.
+    why: Without it a container counts as ready the moment it starts, so the
+      forward attaches before Postgres listens, kubectl exits with "lost
+      connection to pod", and up burns its whole timeout on a dead tunnel.
+    path: internal/kube/manifest.go
+  - what: readyStatus retries the forward instead of failing on the first drop.
+    why: kubectl port-forward exits on any connection error; a single dropped
+      tunnel must not fail an up that is otherwise healthy.
+    path: internal/kube/client.go
+  - what: Identity lives in pod labels, configuration in annotations.
+    why: Label values are limited to 63 alphanumeric-bounded characters, which a
+      password or an image reference does not satisfy; annotations are free-form.
+    path: internal/kube/manifest.go, internal/instance/name.go
+  - what: Every pod gets cpu/memory requests and limits.
+    why: A namespace with a ResourceQuota rejects pods that declare neither, and
+      that failure looks like a devrig bug rather than a cluster policy.
+    path: internal/kube/manifest.go
+  - what: The default timeout is 180s, six times the Docker one.
+    why: A cold node still has to pull the image; 30s fails on the first run and
+      succeeds on the second, which reads as flakiness.
+    path: internal/kube/client.go
+  - what: Status never starts a forward, url and up do.
+    why: Reading state must not create a background process as a side effect,
+      while `url` is a promise that the string it prints is connectable.
+    path: internal/kube/client.go
+
+pending:
+  - what: Optional Service/NodePort exposure for clusters where a long-lived
+      tunnel is not wanted, gated on RBAC being available.
+    path: internal/kube/manifest.go
+  - what: A `prune` for pods whose forward is gone and whose owner walked away.
+    path: internal/kube/client.go
+  - what: MySQL and MariaDB work here as soon as the engine specs land; only the
+      readiness probe is engine-specific.
+    path: internal/engine/engine.go, internal/wait/wait.go

@@ -1,6 +1,7 @@
 package instance
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/tarcisiomiranda/devrig/internal/engine"
@@ -54,5 +55,29 @@ func TestURLPostgresKeepsSSLModeDisable(t *testing.T) {
 	want := "postgres://test:test@127.0.0.1:54321/cyber_mfe_test?sslmode=disable"
 	if u != want {
 		t.Fatalf("got %q want %q", u, want)
+	}
+}
+
+func TestPodNameIsADNS1123Label(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"app", "devrig-app"},
+		{"Cyber_Valid_VFA", "devrig-cyber-valid-vfa"},
+		{"a__b", "devrig-a-b"},
+		{"_", "devrig-app"},
+	} {
+		if got := PodName(tc.in); got != tc.want {
+			t.Fatalf("PodName(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestPodNameFitsTheDNSLimit(t *testing.T) {
+	long := strings.Repeat("a", 63)
+	got := PodName(long)
+	if len(got) > 63 {
+		t.Fatalf("PodName length = %d, want at most 63", len(got))
+	}
+	if strings.HasSuffix(got, "-") {
+		t.Fatalf("PodName %q must not end in a dash", got)
 	}
 }

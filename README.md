@@ -1,8 +1,8 @@
 # devrig
 
 Disposable development dependencies, on demand. `devrig` starts named
-containers through the Docker Engine API, waits until they really answer
-requests, and hands you a connection URL — then throws them away.
+instances — a **Docker container** or a **Kubernetes pod** — waits until they
+really answer requests, and hands you a connection URL, then throws them away.
 
 ```bash
 devrig up postgres --name myapp --db myapp_test
@@ -15,6 +15,15 @@ The resource comes first, the instance name is optional: `devrig up postgres`
 starts one named `postgres`. Use `--name` when you want several, or a name that
 matches the project.
 
+On a server or a cluster where there is no Docker socket and the only tool is
+`kubectl`, the same commands run a pod instead:
+
+```bash
+devrig up postgres --backend kube -n dev --name myapp
+export TEST_DATABASE_URL="$(devrig url myapp)"   # 127.0.0.1, through a port-forward
+devrig down myapp                                # deletes the pod, kills the tunnel
+```
+
 Built for humans and for AI coding agents: every command prints JSON, instance
 names are stable, and ports are ephemeral by default so parallel projects never
 collide.
@@ -22,6 +31,42 @@ collide.
 Today it runs Postgres. The point of the name is that it is not limited to one
 kind of resource: MySQL and MariaDB are next, and other dev dependencies
 (caches, brokers, object storage) fit the same shape. See [TODO.md](TODO.md).
+
+## Backends
+
+| Backend | How it runs | Requirements |
+| --- | --- | --- |
+| `docker` | container through the Docker Engine API | Docker Desktop, OrbStack, Colima or a Linux daemon |
+| `kube` | pod plus a detached `kubectl port-forward` | `kubectl` pointing at a cluster, permission to create pods and `pods/portforward` |
+
+Without `--backend`, devrig uses Docker when the daemon answers and falls back
+to Kubernetes — so the same script works on a laptop and on a k3s or GKE box
+that has nothing but kubectl. `--namespace`, `--context`, `--kubeconfig`,
+`--cpu` or `--memory` on their own already select the kube backend, and
+`DEVRIG_BACKEND=kube` pins it for a whole shell.
+
+`up` always creates on one backend, but `url`, `status`, `logs`, `down` and
+`list` look on both, so a pod started with `--backend kube` is still found by a
+bare `devrig url <name>`.
+
+### What the kube backend creates
+
+One pod named `devrig-<instance>`, labelled `devrig.managed=1`, with the
+credentials and image kept in annotations, a TCP readiness probe on the engine
+port, and cpu/memory requests and limits (`100m`/`256Mi` and `1`/`1Gi`, both
+overridable with `--cpu` and `--memory`) so namespaces with a `ResourceQuota`
+accept it. No Service, no PVC, no namespace is created; storage is the pod's own
+disposable filesystem.
+
+Connectivity is a `kubectl port-forward` that devrig starts detached and records
+under `~/.local/state/devrig/forwards` (`$XDG_STATE_HOME` or `$DEVRIG_STATE_DIR`
+if set). It survives the `devrig` process, so the URL stays valid for the whole
+test run; `down` kills it. If the tunnel dies, `url` and `up` transparently open
+a new one — with an ephemeral port, so read it back instead of caching it.
+
+**The URL is local.** `127.0.0.1:<port>` only means anything on the machine that
+ran `up`. Code running *inside* the cluster must reach the database by pod IP or
+through a Service of its own.
 
 ## Engines
 
@@ -71,7 +116,8 @@ See [skills/README.md](skills/README.md) for paths and flags.
 
 Binaries: Linux and macOS, amd64 and arm64. Windows is not supported — use WSL2.
 
-**Requires a Docker Engine**: Docker Desktop, OrbStack, Colima, or a Linux daemon.
+**Requires a Docker Engine** (Docker Desktop, OrbStack, Colima, or a Linux
+daemon) for the docker backend, or a working `kubectl` for the kube backend.
 
 ### From source
 
@@ -93,13 +139,29 @@ devrig down <name>         # idempotent
 devrig version
 ```
 
+Backend selection is available on every command:
+
+```bash
+devrig up postgres --backend kube -n dev --name myapp [--cpu 250m] [--memory 512Mi]
+devrig list --backend kube -A          # every namespace
+devrig --context gke_proj_zone_cluster --namespace dev list
+```
+
+| Variable | Effect |
+| --- | --- |
+| `DEVRIG_BACKEND` | `docker`, `kube` or `auto` |
+| `DEVRIG_NAMESPACE`, `DEVRIG_CONTEXT`, `DEVRIG_KUBECONFIG` | defaults for the kube flags |
+| `DEVRIG_KUBECTL` | kubectl binary to drive (default: the one in `PATH`) |
+| `DEVRIG_STATE_DIR` | where port-forward state is kept |
+
 `up` is idempotent: if a matching instance is already running it is reused, not
 recreated. If the configuration differs, the old container is replaced.
 
 ### Defaults worth knowing
 
 - **Port is ephemeral** (`--port 0`). Always read it back with `devrig url`
-  instead of hardcoding a port from a previous run.
+  instead of hardcoding a port from a previous run. On the kube backend the port
+  also changes whenever the tunnel is re-established.
 - **`--port` is the host side; `--container-port` is the port inside the
   container.** The container port defaults to the engine's (5432 for Postgres)
   and only needs overriding for an `--image` that listens somewhere else. Set it
@@ -112,13 +174,20 @@ recreated. If the configuration differs, the old container is replaced.
   disposable data; do not put anything real in them.
 - **Postgres URLs carry `?sslmode=disable`** — a local throwaway Postgres has no
   TLS, and several drivers refuse to connect unless told so explicitly.
+- **`--timeout` defaults to the backend**: 30s on Docker, 3m on Kubernetes,
+  where a cold node may still be pulling the image.
 
 ## Safety
 
-`devrig` only ever touches containers it labels itself (`devrig.managed=1`).
-It also recognises containers created by its predecessor `testpg`
-(`cyber.testpg=1`) so those can still be listed and removed. Nothing else on
-your Docker host is inspected or deleted.
+`devrig` only ever touches containers and pods it labels itself
+(`devrig.managed=1`). It also recognises containers created by its predecessor
+`testpg` (`cyber.testpg=1`) so those can still be listed and removed. Nothing
+else on your Docker host or in your cluster is inspected or deleted, and the
+kube backend never creates a namespace, a Service or a volume.
+
+Credentials are `test`/`test` and travel in pod annotations, readable by anyone
+with `get pods` in that namespace. These are throwaway databases: keep real data
+out of them, and prefer a namespace you own.
 
 ## Upgrading from v0.1.x
 

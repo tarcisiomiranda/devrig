@@ -17,6 +17,7 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/tarcisiomiranda/devrig/internal/engine"
 	"github.com/tarcisiomiranda/devrig/internal/instance"
+	"github.com/tarcisiomiranda/devrig/internal/rig"
 	"github.com/tarcisiomiranda/devrig/internal/wait"
 )
 
@@ -57,48 +58,19 @@ func dockerHint() string {
 }
 
 // Status is the public JSON shape for an instance.
-type Status struct {
-	Name          string `json:"name"`
-	Engine        string `json:"engine"`
-	ContainerID   string `json:"container_id,omitempty"`
-	ContainerName string `json:"container_name"`
-	State         string `json:"state"`
-	Ready         bool   `json:"ready"`
-	Host          string `json:"host"`
-	Port          int    `json:"port,omitempty"`
-	ContainerPort int    `json:"container_port,omitempty"`
-	User          string `json:"user"`
-	Password      string `json:"password"`
-	Database      string `json:"database"`
-	Image         string `json:"image"`
-	URL           string `json:"url,omitempty"`
-}
+type Status = rig.Status
 
 // DownResult is the JSON shape for down.
-type DownResult struct {
-	Name    string `json:"name"`
-	Removed bool   `json:"removed"`
-	State   string `json:"state"`
-}
+type DownResult = rig.DownResult
 
 // LogsResult is the JSON shape for logs.
-type LogsResult struct {
-	Name string `json:"name"`
-	Logs string `json:"logs"`
-}
+type LogsResult = rig.LogsResult
 
 // UpOptions configures a new instance.
-type UpOptions struct {
-	Name          string
-	Engine        *engine.Spec
-	User          string
-	Password      string
-	Database      string
-	Image         string
-	Port          int // 0 = ephemeral host port
-	ContainerPort int // 0 = the port the engine spec declares
-	Timeout       time.Duration
-}
+type UpOptions = rig.UpOptions
+
+// Kind reports which backend this client drives.
+func (c *Client) Kind() rig.Kind { return rig.KindDocker }
 
 // Up creates or reuses a ready database instance.
 func (c *Client) Up(ctx context.Context, opt UpOptions) (*Status, error) {
@@ -252,6 +224,7 @@ func (c *Client) waitReady(ctx context.Context, id string, opt UpOptions) (*Stat
 		}
 		return &Status{
 			Name:          opt.Name,
+			Backend:       rig.KindDocker.String(),
 			Engine:        opt.Engine.Name.String(),
 			ContainerID:   shortID(id),
 			ContainerName: strings.TrimPrefix(insp.Name, "/"),
@@ -279,12 +252,12 @@ func (c *Client) Down(ctx context.Context, name string) (*DownResult, error) {
 		return nil, err
 	}
 	if existing == nil {
-		return &DownResult{Name: name, Removed: false, State: "absent"}, nil
+		return &DownResult{Name: name, Backend: rig.KindDocker.String(), Removed: false, State: "absent"}, nil
 	}
 	if err := c.removeContainer(ctx, existing.ID); err != nil {
 		return nil, err
 	}
-	return &DownResult{Name: name, Removed: true, State: "absent"}, nil
+	return &DownResult{Name: name, Backend: rig.KindDocker.String(), Removed: true, State: "absent"}, nil
 }
 
 // Status returns the current instance status.
@@ -297,7 +270,7 @@ func (c *Client) Status(ctx context.Context, name string) (*Status, error) {
 		return nil, err
 	}
 	if existing == nil {
-		return nil, fmt.Errorf("instance %q not found", name)
+		return nil, &rig.NotFoundError{Name: name, Where: "docker"}
 	}
 	return c.statusFromSummary(ctx, existing, true)
 }
@@ -341,7 +314,7 @@ func (c *Client) Logs(ctx context.Context, name string, tail int) (*LogsResult, 
 		return nil, err
 	}
 	if existing == nil {
-		return nil, fmt.Errorf("instance %q not found", name)
+		return nil, &rig.NotFoundError{Name: name, Where: "docker"}
 	}
 	if tail <= 0 {
 		tail = 100
@@ -359,7 +332,7 @@ func (c *Client) Logs(ctx context.Context, name string, tail int) (*LogsResult, 
 	if err != nil {
 		return nil, err
 	}
-	return &LogsResult{Name: name, Logs: stripDockerLogHeaders(b)}, nil
+	return &LogsResult{Name: name, Backend: rig.KindDocker.String(), Logs: stripDockerLogHeaders(b)}, nil
 }
 
 // Docker ANDs filter terms, so current and legacy labels need separate queries.
@@ -452,6 +425,7 @@ func (c *Client) statusFromSummary(ctx context.Context, sum *container.Summary, 
 
 	st := &Status{
 		Name:          name,
+		Backend:       rig.KindDocker.String(),
 		Engine:        spec.Name.String(),
 		ContainerID:   shortID(sum.ID),
 		ContainerName: instance.ContainerName(name),

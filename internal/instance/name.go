@@ -30,6 +30,8 @@ const (
 
 	namePrefix       = "devrig-"
 	legacyNamePrefix = "testpg-"
+
+	maxDNSLabel = 63
 )
 
 // Throwaway credentials shared by every engine.
@@ -86,6 +88,35 @@ func DefaultDatabase(name string) string {
 // ContainerName is the Docker container name for an instance.
 func ContainerName(name string) string {
 	return namePrefix + SanitizeForDB(name)
+}
+
+// SanitizeForDNS turns an instance name into a DNS-1123 label fragment.
+func SanitizeForDNS(name string) string {
+	s := strings.ToLower(name)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	for strings.Contains(out, "--") {
+		out = strings.ReplaceAll(out, "--", "-")
+	}
+	if out == "" {
+		out = "app"
+	}
+	if len(out) > maxDNSLabel-len(namePrefix) {
+		out = strings.Trim(out[:maxDNSLabel-len(namePrefix)], "-")
+	}
+	return out
+}
+
+// PodName is the Kubernetes pod name for an instance.
+func PodName(name string) string {
+	return namePrefix + SanitizeForDNS(name)
 }
 
 // LegacyContainerName is the name used by the old testpg build.

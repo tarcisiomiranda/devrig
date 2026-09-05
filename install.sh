@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install devrig: disposable dev dependencies via Docker.
+# Install devrig: disposable dev dependencies via Docker or Kubernetes.
 #
 #   curl -fsSL https://raw.githubusercontent.com/tarcisiomiranda/devrig/main/install.sh | bash
 #
@@ -150,8 +150,9 @@ main() {
 
     printf '\n'
     "${dir}/${BINARY}" version || true
-    printf '\nDocker (or OrbStack/Colima) must be running. Try:\n'
-    printf '  devrig up demo --db demo_test\n'
+    printf '\nNeeds Docker (or OrbStack/Colima) running, or kubectl pointing at a\n'
+    printf 'cluster for --backend kube. Try:\n'
+    printf '  devrig up postgres --name demo --db demo_test\n'
     # shellcheck disable=SC2016
     printf '  export TEST_DATABASE_URL="$(devrig url demo)"\n'
     printf '  devrig down demo\n'

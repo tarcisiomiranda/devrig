@@ -1,4 +1,4 @@
-last_updated: 2026-08-25
+last_updated: 2026-09-05
 
 domain: cli
 description: Cobra commands, flags, version wiring and JSON/URL output.
@@ -59,6 +59,18 @@ flags:
     path: cmd/root.go
   - name: --tail
     path: cmd/root.go
+  - name: --backend (persistent)
+    path: cmd/backend.go
+  - name: --namespace / -n (persistent, kube)
+    path: cmd/backend.go
+  - name: --context (persistent, kube)
+    path: cmd/backend.go
+  - name: --kubeconfig (persistent, kube)
+    path: cmd/backend.go
+  - name: --all-namespaces / -A (list, kube)
+    path: cmd/backend.go
+  - name: --cpu / --memory (up, kube)
+    path: cmd/backend.go
 
 types:
   - name: version (ldflags main.version)
@@ -67,6 +79,14 @@ types:
     path: internal/out/out.go
 
 decisions:
+  - what: --timeout defaults to 0, meaning "whatever the backend says".
+    why: 30s is right for a local container and wrong for a pod on a cold node;
+      one printed default would have to be wrong for one of the two.
+    path: cmd/root.go, internal/kube/client.go
+  - what: Backend flags are persistent, not per-command.
+    why: down/status/url/logs/list all need to address the same cluster, and a
+      flag that only existed on up would strand every follow-up command.
+    path: cmd/backend.go
   - what: up takes the resource first, with the instance in --name (v0.2.0).
     why: A multi-resource tool reads as `up postgres --name x`; the old shape only made sense while Postgres was the only option.
     path: cmd/root.go

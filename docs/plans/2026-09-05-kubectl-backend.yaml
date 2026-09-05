@@ -1,0 +1,70 @@
+context: |
+  devrig only speaks to a local Docker Engine. The user also runs dev loops on
+  k3s and GKE, where the only thing available is kubectl and (often) permission
+  to run a Pod — no Docker socket, sometimes no permission to create Services.
+goal: |
+  Add a second backend so `devrig up postgres` works against a Kubernetes
+  cluster through kubectl, with the same JSON shapes, the same `url` contract
+  and the same disposable lifecycle.
+scope:
+  - "internal/rig: shared Status/UpOptions/Backend interface, so cmd stops depending on the Docker implementation."
+  - "internal/docker: implement the interface (type aliases keep the package API)."
+  - "internal/kube: kubectl-driven backend (Pod + port-forward + local state)."
+  - "internal/instance: DNS-1123 pod names and Kubernetes label/annotation keys."
+  - "cmd: --backend/--namespace/--context/--kubeconfig, auto-detection, env vars."
+  - "docs: README, SKILL.md, specs/*.yaml, TODO.md."
+out_of_scope:
+  - Service/NodePort/Ingress exposure (needs RBAC the user may not have).
+  - "StatefulSet/PVC persistence: instances stay disposable, on the pod filesystem."
+  - MySQL/MariaDB engines (still pending in TODO.md).
+  - "client-go: kubectl is the only Kubernetes dependency."
+decisions:
+  - what: The Kubernetes backend shells out to kubectl instead of linking client-go.
+    why: The target hosts already have kubectl configured (contexts, auth plugins,
+      GKE gcloud exec credentials); client-go would re-implement all of it and add
+      a huge dependency for no gain.
+  - what: Connectivity is `kubectl port-forward`, not a NodePort Service.
+    why: port-forward needs only pods/portforward, works identically on k3s
+      on-prem and on GKE with private nodes, and keeps the URL on 127.0.0.1 so
+      every existing readiness probe and DSN stays unchanged.
+  - what: The forward runs detached (setsid) and its pid/port live in a state file.
+    why: >-
+      `devrig up` must return and exit while the tunnel stays up for the test
+      run; `down` kills the process group and removes the file.
+  - what: Pod labels carry identity, annotations carry configuration.
+    why: Kubernetes label values are restricted (63 chars, alnum ends); a password
+      or an image reference does not fit, an annotation value does.
+  - what: Backend auto-detection tries Docker first, then Kubernetes.
+    why: On the laptop Docker is the fast path; on a server without a Docker
+      socket the same command falls through to kubectl with no extra flags.
+stages:
+  - name: rig types
+    steps:
+      - internal/rig with Status, DownResult, LogsResult, UpOptions, Backend.
+      - docker aliases the types and gains Kind().
+    verify: mise run check
+  - name: kube backend
+    steps:
+      - kubectl runner, pod manifest, wait-for-running, port-forward state.
+      - Up/Down/Status/List/URL/Logs.
+    verify: mise run check
+  - name: cli wiring
+    steps:
+      - persistent flags, env vars, auto-detection, JSON gains backend/namespace.
+    verify: mise run check
+  - name: tests and docs
+    steps:
+      - unit tests with a fake kubectl; integration test skipped without a cluster.
+      - README, SKILL.md, specs, TODO.
+    verify: mise run check
+risks:
+  - what: A dead port-forward leaves a pod that looks ready but answers nothing.
+    mitigation: status/url re-establish the forward when the pid is gone or the
+      local port stops accepting.
+  - what: Namespaces with a ResourceQuota reject pods without requests/limits.
+    mitigation: the manifest always sets modest requests and limits.
+  - what: Cold nodes pull the image slowly, so 30s (the Docker default) times out.
+    mitigation: --timeout defaults to the backend (30s Docker, 180s Kubernetes).
+rollback: |
+  The Kubernetes path is additive: without --backend/DEVRIG_BACKEND and with a
+  reachable Docker socket, behaviour is byte-identical to v0.3.0.

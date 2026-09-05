@@ -1,4 +1,4 @@
-last_updated: 2026-08-25
+last_updated: 2026-09-05
 
 domain: instances
 description: Instance name validation, container naming, labels and legacy testpg.
@@ -11,6 +11,10 @@ models:
   - name: DefaultDatabase
     path: internal/instance/name.go
   - name: ContainerName
+    path: internal/instance/name.go
+  - name: SanitizeForDNS
+    path: internal/instance/name.go
+  - name: PodName
     path: internal/instance/name.go
   - name: LegacyContainerName
     path: internal/instance/name.go
@@ -37,6 +41,16 @@ frontend:
   types: []
 
 decisions:
+  - what: Pod names go through SanitizeForDNS, not SanitizeForDB.
+    why: >-
+      The database sanitiser maps dashes to underscores, which Kubernetes
+      rejects; a pod name has to be a DNS-1123 label (lowercase, no underscore).
+    path: internal/instance/name.go
+  - what: The same devrig.* keys are labels on containers and split across
+      labels and annotations on pods.
+    why: Kubernetes label values cannot hold a password or an image reference,
+      so only the selectable identity (managed, name, engine) stays a label.
+    path: internal/instance/name.go, internal/kube/manifest.go
   - what: Legacy cyber.testpg.* labels are read, never guessed from current defaults.
     why: The old build stored its own database name; deriving it from the instance name hands out a URL pointing at a database that does not exist.
     path: internal/instance/name.go, internal/docker/client.go

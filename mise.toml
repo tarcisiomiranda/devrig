@@ -41,6 +41,10 @@ run = "go test ./..."
 description = "Run integration tests (requires Docker)"
 run = "go test -tags=integration ./... -count=1"
 
+[tasks."test:integration:kube"]
+description = "Run the Kubernetes integration test (skips when kubectl reaches no cluster)"
+run = "go test -tags=integration -count=1 -v ./internal/kube -run TestKubeLifecycle"
+
 [tasks.check]
 description = "Format check, vet and unit tests"
 run = """

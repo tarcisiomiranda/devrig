@@ -1,4 +1,4 @@
-last_updated: 2026-08-18
+last_updated: 2026-09-05
 
 domains:
   - name: cli
@@ -10,9 +10,15 @@ domains:
   - name: instances
     description: Instance name validation, container naming, labels and legacy testpg.
     path: specs/instances.yaml
+  - name: backends
+    description: The Backend contract shared by Docker and Kubernetes, and backend selection.
+    path: specs/backends.yaml
   - name: docker
     description: Docker Engine API client, lifecycle (up/reuse/down), readiness wait.
     path: specs/docker.yaml
+  - name: kube
+    description: Kubernetes backend — pods through kubectl plus a detached port-forward.
+    path: specs/kube.yaml
   - name: skills
     description: Agent skill (SKILL.md) and installer for Claude, Codex, Grok and others.
     path: specs/skills.yaml

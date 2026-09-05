@@ -4,9 +4,10 @@
 
 **Status: not implemented.** Both engines are already *declared* in
 `internal/engine/engine.go` with `Implemented: false`, so `devrig up mysql`
-fails with a clear "planned" message instead of "unknown resource". The Docker layer
-is engine-agnostic already — it reads image, port, env and DSN from the
-`engine.Spec`. What is missing is each engine's data plus a readiness probe.
+fails with a clear "planned" message instead of "unknown resource". Both
+backends are engine-agnostic already — Docker and Kubernetes read image, port,
+env and DSN from the `engine.Spec`, so filling in the spec plus a readiness
+probe lights up `--backend kube` too, at no extra cost.
 
 ### 1. Fill in the specs — `internal/engine/engine.go`
 
@@ -55,7 +56,8 @@ MySQL branch:
 `Up` reuses a running container when user/password/database/image/port match.
 Add the engine to that comparison, otherwise `up mysql --name x` would adopt a
 Postgres container that happens to carry the same name. The engine is already
-persisted in the `devrig.engine` label and surfaced in `Status.Engine`.
+persisted in the `devrig.engine` label and surfaced in `Status.Engine`. The
+Kubernetes backend already compares the engine label in `matchesConfig`.
 
 ### 4. Decide the URL shape — affects callers
 
@@ -86,11 +88,34 @@ Document it in the README so nobody guesses.
 - `skills/devrig/SKILL.md`: teach agents the new resource, and that
   `sslmode=disable` is Postgres-only (MySQL has its own TLS flags).
 
+## Kubernetes backend
+
+Shipped: pod + detached `kubectl port-forward`, auto-detection, `--namespace`,
+`--context`, `--kubeconfig`, `--cpu`, `--memory`, `list -A`. See
+[specs/kube.yaml](specs/kube.yaml). Known gaps:
+
+- **No Service/NodePort option.** Exposure is always a local tunnel, which is
+  the only thing that needs no RBAC beyond `pods/portforward`. A cluster where
+  a long-lived tunnel is unwanted would want `--expose nodeport`, gated on the
+  caller actually being allowed to create Services.
+- **No `prune` for orphans.** A pod whose forward is gone (or whose owner walked
+  away) keeps running; only `down <name>` removes it. `list` shows it with
+  `ready: false` and no port.
+- **The forward is per machine.** `~/.local/state/devrig/forwards` is local
+  state: two people pointing at the same instance each get their own tunnel and
+  their own local port, which is intended but worth stating.
+- **No in-cluster mode.** For a test that runs *inside* the cluster, the useful
+  output is the pod IP or a Service DNS name, not `127.0.0.1`. That is a
+  different contract for `url` and is deliberately not guessed at.
+- **Integration test needs a cluster.** `mise run test:integration:kube` skips
+  itself when kubectl cannot reach one; set `DEVRIG_TEST_NAMESPACE` to pick the
+  namespace it creates the pod in.
+
 ## Smaller items
 
 - `up` has no `--reuse=false` flag; today reuse is implicit when the config matches.
 - No `prune` command for stopped instances (`list` shows them, `down` takes one name).
-- `logs` does not follow; `--tail` only.
+- `logs` does not follow; `--tail` only (both backends).
 - Consider `--host` for binding beyond loopback (deliberately not exposed yet:
   these containers have throwaway credentials).
 

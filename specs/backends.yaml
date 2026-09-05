@@ -1,0 +1,64 @@
+last_updated: 2026-09-05
+
+domain: backends
+description: The Backend contract shared by Docker and Kubernetes, and how one is chosen.
+
+models:
+  - name: Kind
+    path: internal/rig/rig.go
+  - name: Status / DownResult / LogsResult / UpOptions
+    path: internal/rig/rig.go
+  - name: Backend
+    path: internal/rig/rig.go
+  - name: NotFoundError / IsNotFound
+    path: internal/rig/rig.go
+  - name: autoBackend
+    path: cmd/auto.go
+  - name: resolveKind / selectBackend / kubeOptions
+    path: cmd/backend.go
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []
+
+decisions:
+  - what: The JSON shapes moved to internal/rig, and docker keeps type aliases.
+    why: The CLI depends on the contract instead of the Docker implementation,
+      while docker.Status and docker.UpOptions stay valid for existing callers.
+    path: internal/rig/rig.go, internal/docker/client.go
+  - what: Every status carries a "backend" field.
+    why: With two backends, "port 34567 on 127.0.0.1" is ambiguous; agents and
+      scripts need to know whether they are looking at a container or a tunnel.
+    path: internal/rig/rig.go
+  - what: Auto-detection tries Docker first and falls back to Kubernetes.
+    why: The laptop path stays fast and unchanged, while a host without a Docker
+      socket runs the same command against the cluster with no extra flags.
+    path: cmd/backend.go
+  - what: In auto mode, read commands search both backends; up creates on one.
+    why: >-
+      `up --backend kube` followed by a bare `devrig url` must resolve, and
+      `down` must not report "absent" from Docker while the pod keeps running.
+    path: cmd/auto.go
+  - what: Missing instances are a typed NotFoundError, not a string.
+    why: The auto backend has to tell "this backend does not have it" from a
+      real failure (a broken socket, denied RBAC) it must not swallow.
+    path: internal/rig/rig.go, cmd/auto.go
+  - what: Kube-only flags (--namespace, --context, --kubeconfig, --cpu, --memory)
+      imply the kube backend when --backend is absent.
+    why: >-
+      `devrig up postgres -n dev` can mean nothing else, and failing over to
+      Docker would silently ignore the namespace.
+    path: cmd/backend.go
+
+pending:
+  - what: "`--backend all` for list, to enumerate every cluster in the kubeconfig."
+    path: cmd/auto.go
