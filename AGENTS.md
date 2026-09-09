@@ -1,8 +1,10 @@
 # devrig — instructions for AI agents
 
 Go CLI that runs disposable development dependencies as containers through the
-Docker Engine API. Postgres today; the architecture is meant to take other
-resources without reshaping the Docker layer. Linux and macOS only.
+Docker Engine API or as Kubernetes pods through kubectl, and builds and pushes
+images through the podman or docker CLI. Postgres today; the architecture is
+meant to take other resources without reshaping the Docker layer. Linux and
+macOS only.
 
 ## Absolute rules
 
@@ -14,6 +16,9 @@ resources without reshaping the Docker layer. Linux and macOS only.
   name-prefix or image-based deletion.
 - Do not add credentials, hosts or bind addresses beyond loopback defaults.
 - Do not hide failures with skipped tests or `|| true`.
+- Never print, log or pass a registry token anywhere but the tool's stdin.
+  Tests in `internal/image` assert the password is absent from argv, JSON and
+  error strings; keep them passing.
 
 ## Layout
 
@@ -23,6 +28,11 @@ resources without reshaping the Docker layer. Linux and macOS only.
 | `cmd/root.go` | cobra commands and flags |
 | `internal/engine/` | **all engine-specific data**: image, port, env, DSN |
 | `internal/docker/` | Docker Engine API: create, reuse, inspect, remove |
+| `internal/kube/` | Kubernetes backend: pod + detached `kubectl port-forward` |
+| `internal/rig/` | the Backend contract and JSON shapes shared by docker and kube |
+| `internal/image/` | build/push/login through the podman or docker CLI; tool selection, credential keys |
+| `internal/envfile/` | reads `.env`/JSON/YAML/TOML through confctl (no native parser) |
+| `cmd/image.go` | `build`, `push`, `login` commands, `--tool`, env-file sources |
 | `internal/instance/` | name validation, labels, container naming |
 | `internal/wait/` | readiness: TCP accept **and** a real query |
 | `internal/out/` | JSON stdout, fatal errors to stderr |
@@ -52,6 +62,11 @@ MySQL and MariaDB are declared with `Implemented: false` and fail with a clear
   `$(devrig url x)` works in a shell.
 - Legacy `testpg` containers stay listable and removable, with their **real**
   labels read (never guess the database name from the instance name).
+- Tool auto-detection is podman, then docker. `--tool`/`DEVRIG_TOOL` pin one.
+- Build and push are not part of `rig.Backend`; `--backend kube` never builds.
+- Credentials come from the env file first, then the environment, with the
+  key order in `internal/image/creds.go`; the env file is read only through
+  confctl.
 
 ## Commands
 
@@ -77,4 +92,5 @@ passing:
 ./bin/devrig up postgres --name smoke --db smoke_test
 ./bin/devrig url smoke
 ./bin/devrig down smoke
+mise run test:integration:image     # build + push against a local registry:2
 ```

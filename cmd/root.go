@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tarcisiomiranda/devrig/internal/engine"
+	"github.com/tarcisiomiranda/devrig/internal/image"
 	"github.com/tarcisiomiranda/devrig/internal/kube"
 	"github.com/tarcisiomiranda/devrig/internal/out"
 	"github.com/tarcisiomiranda/devrig/internal/rig"
@@ -56,7 +57,9 @@ var rootCmd = &cobra.Command{
 		"Backends: docker (Docker Engine API) and kube (kubectl: a pod plus a\n" +
 		"port-forward, so the URL stays on 127.0.0.1). Without --backend, devrig\n" +
 		"uses Docker when it answers and falls back to kubectl.\n\n" +
-		"Resources: postgres (ready). mysql and mariadb are planned — see TODO.md.",
+		"Resources: postgres (ready). mysql and mariadb are planned — see TODO.md.\n\n" +
+		"Images: build, push and login drive the podman or docker CLI (auto prefers\n" +
+		"podman) and read registry credentials from .env through confctl.",
 	SilenceErrors: true,
 	SilenceUsage:  true,
 }
@@ -252,6 +255,7 @@ var versionCmd = &cobra.Command{
 			"name":     "devrig",
 			"version":  appVersion,
 			"backends": []string{rig.KindDocker.String(), rig.KindKube.String()},
+			"tools":    image.Known(),
 			"engines":  engine.Implemented(),
 			"planned":  []string{string(engine.MySQL), string(engine.MariaDB)},
 		})

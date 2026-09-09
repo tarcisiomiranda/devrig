@@ -1,4 +1,4 @@
-last_updated: 2026-09-05
+last_updated: 2026-09-08
 
 domains:
   - name: cli
@@ -19,6 +19,9 @@ domains:
   - name: kube
     description: Kubernetes backend — pods through kubectl plus a detached port-forward.
     path: specs/kube.yaml
+  - name: image
+    description: Build, push and registry login through podman or docker, credentials via confctl.
+    path: specs/image.yaml
   - name: skills
     description: Agent skill (SKILL.md) and installer for Claude, Codex, Grok and others.
     path: specs/skills.yaml

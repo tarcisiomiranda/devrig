@@ -3,6 +3,8 @@
 Disposable development dependencies, on demand. `devrig` starts named
 instances — a **Docker container** or a **Kubernetes pod** — waits until they
 really answer requests, and hands you a connection URL, then throws them away.
+It also builds and pushes images with Podman or Docker, logging in from `.env`
+without ever showing the token.
 
 ```bash
 devrig up postgres --name myapp --db myapp_test
@@ -137,6 +139,9 @@ devrig list                # every managed instance
 devrig logs <name> [--tail N]
 devrig down <name>         # idempotent
 devrig version
+devrig build [ctx] -t IMG [-t IMG]... [-f FILE] [--platform P] [--build-arg K=V] [--target T] [--no-cache] [--push]
+devrig push IMG [IMG...] [--env-file F] [--no-login] [--tool podman|docker|auto]
+devrig login [REGISTRY] [--env-file F] [--user-key K] [--password-key K] [--registry-key K]
 ```
 
 Backend selection is available on every command:
@@ -176,6 +181,67 @@ recreated. If the configuration differs, the old container is replaced.
   TLS, and several drivers refuse to connect unless told so explicitly.
 - **`--timeout` defaults to the backend**: 30s on Docker, 3m on Kubernetes,
   where a cold node may still be pulling the image.
+
+## Build and push
+
+The other half of a dev loop: build an image and push it, with the same tool
+split the machines already have. A laptop has Docker; a Kubernetes box has
+`kubectl` plus **Podman** and no Docker socket, and there Podman is what
+builds and pushes while kubectl runs things. Nobody has both.
+
+```bash
+devrig build -t ghcr.io/org/app:dev .                       # podman if present, else docker
+devrig build -t ghcr.io/org/app:dev --platform linux/amd64 --push
+devrig push ghcr.io/org/app:dev                              # logs in from .env, then pushes
+devrig login ghcr.io                                         # just the login
+```
+
+`--tool podman|docker|auto` (or `DEVRIG_TOOL`) pins the CLI; `auto` tries
+Podman first and falls back to Docker when Podman is absent or its machine is
+stopped. The tool is independent from `--backend`: `DEVRIG_BACKEND=kube` and
+Podman installed means "build with Podman, run on the cluster". `--backend
+kube` itself never builds. Build and push output streams to **stderr**; stdout
+carries one JSON object (`tool`, `tags`, `image_id`, `duration_ms`; for push
+`pushed[].digest` and `logins[]`).
+
+### Registry login from `.env`
+
+`push` (and `build --push`) look for credentials before pushing: first in the
+env file, then in the process environment. The file is `./.env` when it
+exists, or `--env-file <path>`; it is read through
+[confctl](https://github.com/tarcisiomiranda/confctl), so `.yaml`, `.json`
+and `.toml` work too. The token is handed to `podman login --password-stdin`
+(or docker's) and never appears in argv, in JSON or in an error.
+
+| Field | Keys, in order | Override |
+| --- | --- | --- |
+| registry | `REGISTRY`, `CONTAINER_REGISTRY`, `DOCKER_REGISTRY` | `login --registry-key K` (push derives it from the image) |
+| user | `REGISTRY_USER`, `REGISTRY_USERNAME`, `DOCKER_USER`, `DOCKER_USERNAME` | `--user-key K` |
+| token | `REGISTRY_TOKEN`, `REGISTRY_PASSWORD`, `DOCKER_TOKEN`, `DOCKER_PASSWORD` | `--password-key K` |
+
+```bash
+confctl set .env REGISTRY_USER=alice REGISTRY_TOKEN=ghp_xxx   # write them
+confctl -r .env                                               # look, redacted
+devrig push ghcr.io/alice/app:dev                             # devrig reads them itself
+```
+
+No credentials found means push proceeds without login (the tool may hold a
+session already) and `logins` stays empty. `--no-login` skips the lookup
+entirely and reads no file. A registry on `localhost` or `127.0.0.1` gets
+`--tls-verify=false` on Podman, which is what Docker does by default.
+
+**confctl is required** whenever an env file is read; the error carries the
+installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tarcisiomiranda/confctl/main/install.sh | bash
+```
+
+| Variable | Effect |
+| --- | --- |
+| `DEVRIG_TOOL` | `podman`, `docker` or `auto` |
+| `DEVRIG_PODMAN`, `DEVRIG_DOCKER` | binaries to drive (default: the ones in `PATH`) |
+| `DEVRIG_CONFCTL` | confctl binary (default: the one in `PATH`) |
 
 ## Safety
 

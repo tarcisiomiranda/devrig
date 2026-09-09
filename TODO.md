@@ -111,6 +111,17 @@ Shipped: pod + detached `kubectl port-forward`, auto-detection, `--namespace`,
   itself when kubectl cannot reach one; set `DEVRIG_TEST_NAMESPACE` to pick the
   namespace it creates the pod in.
 
+## Podman as an instance backend
+
+**Deliberately not done.** Podman speaks the Docker Engine API, so pointing
+`internal/docker` at the Podman socket (`CONTAINER_HOST`, `podman machine
+inspect`, `podman info --format '{{.Host.RemoteSocket.Path}}'`) would give
+`devrig up postgres --backend podman` for little code. It is not built because
+on the machines that have Podman the tests run through kubectl: Podman is the
+build-and-push tool there, and a laptop has Docker. If a Podman-only box ever
+needs `up`, the work is a `Kind` value, socket discovery and a `Backend`
+field of `"podman"`; nothing in the lifecycle changes.
+
 ## Smaller items
 
 - `up` has no `--reuse=false` flag; today reuse is implicit when the config matches.
@@ -118,6 +129,10 @@ Shipped: pod + detached `kubectl port-forward`, auto-detection, `--namespace`,
 - `logs` does not follow; `--tail` only (both backends).
 - Consider `--host` for binding beyond loopback (deliberately not exposed yet:
   these containers have throwaway credentials).
+- `push` reports the digest best effort: Podman via `--digestfile`, Docker by
+  parsing stdout. An empty digest is not an error.
+- `build --platform` takes one platform; multi-arch manifest lists are out of
+  scope.
 
 ## Beyond databases
 

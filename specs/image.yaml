@@ -1,0 +1,104 @@
+last_updated: 2026-09-08
+
+domain: image
+description: Build, push and registry login through the podman or docker CLI, with credentials read from an env file through confctl.
+
+models:
+  - name: Tool / ParseTool / Known / Options
+    path: internal/image/tool.go
+  - name: Client / New / runner
+    path: internal/image/tool.go
+  - name: Source / SourceFromEnviron / KeyOverrides / Credentials
+    path: internal/image/creds.go
+  - name: RegistryKeys / UserKeys / PasswordKeys
+    path: internal/image/creds.go
+  - name: Resolve / NoCredentialsError / IsNoCredentials
+    path: internal/image/creds.go
+  - name: Registry
+    path: internal/image/ref.go
+  - name: BuildOptions / BuildResult / Build
+    path: internal/image/build.go
+  - name: PushOptions / Pushed / PushResult / Push
+    path: internal/image/push.go
+  - name: LoginResult / LoginKeys / Login
+    path: internal/image/login.go
+  - name: Runner / NewRunner / Read / FormatArgs / MissingBinaryError
+    path: internal/envfile/envfile.go
+
+graphql:
+  queries: []
+  mutations: []
+
+rest:
+  endpoints: []
+
+frontend:
+  pages: []
+  hooks: []
+  components: []
+  types: []
+
+commands:
+  - name: build [context]
+    path: cmd/image.go
+  - name: push <image>...
+    path: cmd/image.go
+  - name: login [registry]
+    path: cmd/image.go
+
+decisions:
+  - what: Build and push shell out to the podman or docker CLI, not the Engine API.
+    why: BuildKit, --platform, credential helpers and Podman parity live in the
+      CLI; the API's ImageBuild is the legacy builder and Podman's compat
+      endpoint has gaps. The runner mirrors internal/kube/kubectl.go.
+    path: internal/image/tool.go
+  - what: Auto-detection prefers podman, then docker.
+    why: The machines that have Podman (kube boxes) have no Docker, and a
+      laptop with Docker has no Podman; the order only matters when a Podman
+      client is present with its machine stopped, and then Docker keeps working.
+    path: internal/image/tool.go
+  - what: The tool is independent from the instance backend, and kube never builds.
+    why: DEVRIG_BACKEND=kube plus Podman means "run on the cluster, build with
+      Podman"; a cluster has no build, so build/push are not on rig.Backend.
+    path: cmd/image.go, internal/rig/rig.go
+  - what: Podman is not an instance backend.
+    why: On the machines in question tests run through kubectl; Podman is the
+      build-and-push tool. Recorded in TODO.md as a cheap follow-up.
+    path: TODO.md
+  - what: The env file is read only through confctl; no native parser.
+    why: One reader means one set of quoting rules, and confctl brings
+      JSON/YAML/TOML for free. The error carries the one-line installer.
+    path: internal/envfile/envfile.go
+  - what: confctl scalars are stringified, nested values skipped, and the file
+      is stat'ed before confctl runs.
+    why: confctl types PORT=5432 as a number (an all-digit token must survive)
+      and reports a missing file as "Key not found".
+    path: internal/envfile/envfile.go
+  - what: The password reaches the tool on stdin only.
+    why: argv shows in ps, JSON reaches transcripts, errors reach logs; tests
+      assert absence from all three.
+    path: internal/image/login.go
+  - what: Credentials resolve sources in order (env file, then environment), keys in order within each.
+    why: A project's .env is more specific than the shell, whatever key name it uses.
+    path: internal/image/creds.go
+  - what: Missing credentials on push are not an error; partial credentials are.
+    why: The tool may hold a session already, but a user without a token is a
+      misconfiguration worth naming.
+    path: internal/image/push.go
+  - what: Loopback registries get --tls-verify=false on Podman only.
+    why: Docker treats 127.0.0.0/8 and localhost as insecure by default; Podman
+      does not, and the integration test pushes to a local registry:2.
+    path: internal/image/login.go
+  - what: Tool output streams to stderr; stdout carries one JSON object.
+    why: Every devrig command is machine-readable; a build log on stdout would
+      break `| jq` and the agents that parse results.
+    path: cmd/image.go
+  - what: build --push runs devrig's own push path instead of the tool's --push.
+    why: One login implementation and one JSON shape for both commands.
+    path: cmd/image.go
+
+pending:
+  - what: Multi-platform manifest lists (--platform takes one platform).
+    path: internal/image/build.go
+  - what: Podman as an instance backend, if a Podman-only box ever needs `up`.
+    path: internal/docker/client.go

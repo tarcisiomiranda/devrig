@@ -1,13 +1,16 @@
 ---
 name: devrig
 description: >
-  Disposable dev dependencies via Docker or Kubernetes. Use when tests or a
-  local dev loop need a real database, when setting TEST_DATABASE_URL, when
-  replacing ad-hoc `docker run postgres` or `kubectl run postgres`, when a DSN
-  (postgres://, mysql://) is needed, when working on a server or cluster that
-  has kubectl but no Docker socket, or when cleaning up throwaway instances.
-  Commands: up, url, status, list, logs, down. Linux and macOS. Compatible with
-  Claude Code, Codex, OpenCode, Cursor, Grok and other Agent Skills clients.
+  Disposable dev dependencies via Docker or Kubernetes, plus image build and
+  push through Podman or Docker. Use when tests or a local dev loop need a
+  real database, when setting TEST_DATABASE_URL, when replacing ad-hoc
+  `docker run postgres` or `kubectl run postgres`, when a DSN (postgres://,
+  mysql://) is needed, when working on a server or cluster that has kubectl
+  but no Docker socket, when an image must be built or pushed to a registry
+  and the credentials live in a .env file, or when cleaning up throwaway
+  instances. Commands: up, url, status, list, logs, down, build, push, login.
+  Linux and macOS. Compatible with Claude Code, Codex, OpenCode, Cursor, Grok
+  and other Agent Skills clients.
 ---
 
 # devrig
@@ -95,10 +98,47 @@ devrig list                # every managed instance
 devrig logs <name> --tail 100
 devrig down <name>
 devrig version
+devrig build [ctx] -t IMG [--platform linux/amd64] [--push]   # podman if present, else docker
+devrig push IMG [--env-file F] [--no-login]                    # logs in from .env, then pushes
+devrig login [REGISTRY] [--user-key K] [--password-key K]      # never prints the token
 ```
 
 `up` reuses a running instance when the configuration matches, so calling it at
 the start of every test run is cheap and safe.
+
+## Build and push
+
+```bash
+devrig build -t ghcr.io/org/app:dev .            # output on stderr, JSON on stdout
+devrig push ghcr.io/org/app:dev                   # reads ./.env through confctl, logs in, pushes
+devrig build -t ghcr.io/org/app:dev --push        # both in one go
+```
+
+Rules:
+
+1. **Do not choose between `docker` and `podman` by hand.** `devrig build`
+   and `devrig push` pick the tool: Podman when it is installed and answers,
+   Docker otherwise. A machine with kubectl and Podman builds with Podman
+   and runs instances with `--backend kube`; those are the two halves of the
+   loop.
+2. **Never `cat .env`, never `echo $TOKEN`, never `docker login -p <token>`.**
+   devrig reads the user and the token itself and hands the token to the tool
+   on stdin. To see which keys a file has, run `confctl -r .env` (redacted).
+   To add them, run `confctl set .env REGISTRY_USER=<user> REGISTRY_TOKEN=<token>`
+   with values the user gives you, never values you found elsewhere.
+3. **Credential keys**, in order: user `REGISTRY_USER`, `REGISTRY_USERNAME`,
+   `DOCKER_USER`, `DOCKER_USERNAME`; token `REGISTRY_TOKEN`,
+   `REGISTRY_PASSWORD`, `DOCKER_TOKEN`, `DOCKER_PASSWORD`. The env file wins
+   over the shell environment. A project with other names gets
+   `--user-key`/`--password-key`; do not rename its keys to fit devrig.
+4. **If login or push fails, report the error verbatim and stop.** Do not
+   retry with a token pasted on the command line, do not switch registries,
+   do not "try docker instead".
+5. **Never put a secret in `--build-arg`.** It ends up in the image history.
+6. **confctl missing** is a real error with the installer in it; tell the
+   user, do not fall back to parsing `.env` yourself.
+7. **The JSON never contains the token.** `logins[]` names the registry, the
+   user and the *key* the token came from; that is all you should ever quote.
 
 ## Engines
 

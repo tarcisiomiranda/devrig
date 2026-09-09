@@ -11,3 +11,7 @@ __pycache__/
 .mise.local.toml
 
 .DS_Store
+
+# superpowers (specs/plans de sessão e workspace do skill)
+docs/superpowers/
+.superpowers/

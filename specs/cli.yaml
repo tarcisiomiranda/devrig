@@ -1,4 +1,4 @@
-last_updated: 2026-09-05
+last_updated: 2026-09-08
 
 domain: cli
 description: Cobra commands, flags, version wiring and JSON/URL output.
@@ -36,6 +36,12 @@ commands:
     path: cmd/root.go
   - name: version
     path: cmd/root.go
+  - name: build [context]
+    path: cmd/image.go
+  - name: push <image>...
+    path: cmd/image.go
+  - name: login [registry]
+    path: cmd/image.go
 
 flags:
   - name: --port
@@ -71,6 +77,18 @@ flags:
     path: cmd/backend.go
   - name: --cpu / --memory (up, kube)
     path: cmd/backend.go
+  - name: --tool (build, push, login)
+    path: cmd/image.go
+  - name: --env-file (build, push, login)
+    path: cmd/image.go
+  - name: --user-key / --password-key (build, push, login)
+    path: cmd/image.go
+  - name: --registry-key (login)
+    path: cmd/image.go
+  - name: -t/--tag, -f/--file, --platform, --build-arg, --target, --no-cache, --push (build)
+    path: cmd/image.go
+  - name: --no-login (build, push)
+    path: cmd/image.go
 
 types:
   - name: version (ldflags main.version)
@@ -99,3 +117,11 @@ decisions:
   - what: Execute prints cobra-level errors before returning.
     why: With SilenceErrors and no handler, unknown flags and bad argument counts produced no output at all, only exit 1.
     path: cmd/root.go
+  - what: --tool is a per-command flag on build/push/login, not persistent.
+    why: It means nothing to up/down/url; a persistent flag would suggest the
+      instance backend could be "podman".
+    path: cmd/image.go
+  - what: --env-file defaults to ./.env only when that file exists; an explicit path must exist.
+    why: A project without a .env must push with the tool's own session and no
+      error, while a typo in --env-file must not be silently ignored.
+    path: cmd/image.go
