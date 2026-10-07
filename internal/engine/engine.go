@@ -28,8 +28,9 @@ type Spec struct {
 	DefaultUser     string
 	DefaultPassword string
 
-	Env func(user, password, database string) []string
-	URL func(user, password, host string, port int, database string) string
+	Env       func(user, password, database string) []string
+	URL       func(user, password, host string, port int, database string) string
+	ClientEnv func(user, password, host string, port int, database string) map[string]string
 
 	Implemented bool
 }
@@ -46,6 +47,16 @@ var specs = map[Name]*Spec{
 				"POSTGRES_USER=" + user,
 				"POSTGRES_PASSWORD=" + password,
 				"POSTGRES_DB=" + database,
+			}
+		},
+		ClientEnv: func(user, password, host string, port int, database string) map[string]string {
+			return map[string]string{
+				"PGHOST":     host,
+				"PGPORT":     fmt.Sprint(port),
+				"PGUSER":     user,
+				"PGPASSWORD": password,
+				"PGDATABASE": database,
+				"PGSSLMODE":  "disable",
 			}
 		},
 		// sslmode=disable: local throwaway Postgres has no TLS.

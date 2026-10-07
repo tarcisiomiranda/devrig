@@ -8,7 +8,10 @@ description: >
   mysql://) is needed, when working on a server or cluster that has kubectl
   but no Docker socket, when an image must be built or pushed to a registry
   and the credentials live in a .env file, or when cleaning up throwaway
-  instances. Commands: up, url, status, list, logs, down, build, push, login.
+  instances, executing commands in managed containers/pods, running helper
+  images, executing TXT command lists, or passing complex arguments and
+  stdin without shell quoting.
+  Commands: up, url, status, list, logs, down, exec, run, build, push, login.
   Linux and macOS. Compatible with Claude Code, Codex, OpenCode, Cursor, Grok
   and other Agent Skills clients.
 ---
@@ -97,6 +100,10 @@ devrig status <name>       # JSON: state, ready, port, url
 devrig list                # every managed instance
 devrig logs <name> --tail 100
 devrig down <name>
+devrig exec <name> [--request FILE] [--stdin-file FILE] -- COMMAND [ARG...]
+devrig run IMAGE [--connect NAME] [--request FILE] [--stdin-file FILE] -- COMMAND [ARG...]
+devrig exec <name> --commands-file FILE.txt
+devrig run IMAGE [--connect NAME] --commands-file FILE.txt
 devrig version
 devrig build [ctx] -t IMG [--platform linux/amd64] [--push]   # podman if present, else docker
 devrig push IMG [--env-file F] [--no-login]                    # logs in from .env, then pushes
@@ -105,6 +112,134 @@ devrig login [REGISTRY] [--user-key K] [--password-key K]      # never prints th
 
 `up` reuses a running instance when the configuration matches, so calling it at
 the start of every test run is cheap and safe.
+
+## Commands inside instances and helper images
+
+Choose the input format by its contents, not its file extension:
+
+| Contents | Use |
+| --- | --- |
+| One executable command per TXT line | `--commands-file commands.txt` |
+| Complex argv/env or multiline input | `--request request.json` |
+| SQL statements in a TXT or SQL file | `--stdin-file commands.txt -- psql -v ON_ERROR_STOP=1` |
+
+Use `devrig exec` instead of `docker exec` or `kubectl exec` for managed
+instances. It works on Docker and Kubernetes, looks up the real ownership
+labels and sets the engine's client environment. For Postgres that includes
+the actual user, password, database and container port, with
+`PGHOST=127.0.0.1` and `PGSSLMODE=disable`.
+
+```bash
+devrig exec myapp -- psql -At -c 'SELECT 1'
+devrig exec myapp --stdin-file migration.sql -- psql -v ON_ERROR_STOP=1
+```
+
+Use `devrig run` instead of an ad-hoc `docker run` for helper commands in a
+specific image, such as validating or restoring a dump with a backup image.
+It uses the Docker Engine API and automatically removes only its own helper
+after completion, failure, interruption or timeout. `--connect NAME` shares
+a managed instance's network and derives the client environment from its
+actual configuration, so the helper connects over loopback.
+
+```bash
+devrig run backup:local --stdin-file fixture.dump -- pg_restore --list
+devrig run backup:local --connect myapp --stdin-file fixture.dump -- pg_restore --exit-on-error --no-owner --no-acl --dbname=myapp_test
+```
+
+Rules:
+
+1. **Prefer structured requests for complex input.** Write a JSON request
+   file with `argv` as an array, `env` as an object, and either `stdin` as a
+   string or `stdin_file`. Use `--request FILE`; `--request -` accepts JSON
+   on stdin. Do not concatenate user input into a shell command. devrig
+   passes each argument and stdin directly, preserving quotes, `$`, spaces,
+   backticks, newlines, backslashes and Unicode. SQL and other receiving
+   programs still interpret their own input syntax.
+2. **No implicit shell.** Use `-- COMMAND ARG...` for simple calls. With
+   `run`, the command replaces the image's entrypoint; omitting it uses the
+   image defaults. Shell syntax only works if you explicitly invoke a shell.
+3. **Read the JSON and exit status.** `stdout`, `stderr` and `exit_code` are
+   separate. The CLI also exits with the command's failure code. Invalid
+   UTF-8 is returned as `stdout_base64`/`stderr_base64`; never treat a failed
+   command as success just because it produced output.
+4. **Stream dumps through files.** `--stdin-file` preserves binary bytes.
+   Use `--stdout-file`/`--stderr-file` for large or binary output, also
+   available as request fields. Output files are mode `0600`, are never
+   overwritten and can contain partial data on failure. Request file paths
+   are relative to the JSON file; flag paths are relative to the current
+   directory. Do not put binary dumps through shell variables or JSON text.
+5. **One stdin source.** `-i`/`--stdin-file -` reads command stdin without a
+   TTY. Never combine it with `--request -`; put input in request `stdin` or
+   a file. Positional arguments and request `argv` are mutually exclusive.
+6. **Use `--connect`, not generated container names or host ports.** The
+   helper inherits the target's client connection settings; explicit `env`
+   or repeatable `--env KEY=VALUE` values override defaults. `--name` is
+   optional; names in use are never replaced by `run`.
+7. **Backend limits are explicit.** `exec` works on both backends; `run`
+   and `exec --workdir` currently require Docker. On kube report that limit
+   instead of silently switching to a raw container command. Kubernetes
+   `exec` needs `create pods/exec` permission and the image's `env` program.
+8. **Timeouts differ from instance lifetime.** `--timeout` is optional and
+   defaults to no limit for these commands. Interrupted/timed-out `run`
+   removes the helper. Interrupted/timed-out `exec` detaches; the command
+   inside the existing instance may keep running.
+
+Example `.build/restore.json`, next to `fixture.dump`:
+
+```json
+{
+  "connect": "myapp",
+  "argv": ["pg_restore", "--exit-on-error", "--no-owner", "--no-acl", "--dbname=myapp_test"],
+  "stdin_file": "fixture.dump"
+}
+```
+
+```bash
+devrig run backup:local --request .build/restore.json
+```
+
+`exec` requests accept `argv`, `env`, `stdin`, `stdin_file`, `stdout_file`,
+`stderr_file` and `workdir`. `run` also accepts `name` and `connect`. Flags
+override corresponding fields. Unknown fields, trailing JSON, invalid env
+names and NUL in arguments/env values are errors. Requests and env values
+are not echoed in the result, but the command's own output is returned.
+
+### Lists of commands in a text file
+
+For several simple commands, use `--commands-file FILE.txt` with one command
+per physical line, or `--commands-file -` to read the list from stdin:
+
+```text
+psql -At -c "SELECT current_database()"
+psql -At -c "SELECT 'literal $HOME'"
+```
+
+```bash
+devrig exec myapp --commands-file commands.txt
+devrig run postgres:16-alpine --connect myapp --commands-file commands.txt
+```
+
+The entire file is validated first. Lines execute in order and stop on the
+first failure. Read overall `exit_code`, `total` and `results[]`; each result
+includes its physical `line`, stdout, stderr and exit_code. Earlier results
+remain available if a later command fails.
+
+Blank lines and unquoted `#` comments at a word boundary are ignored. Single
+and double quotes group arguments; empty quoted arguments are preserved.
+Outside quotes, backslash escapes the next character. In double quotes it
+escapes `$`, backticks, `"` and `\`; other backslashes remain literal.
+Variables, backticks, substitutions and globs never expand. Unquoted shell
+operators (`;`, `|`, `&`, `<`, `>`) are errors; invoke a shell explicitly with
+a quoted script when shell behavior is intended. Use JSON/stdin files for
+multiline input. The text must be UTF-8; CRLF and a leading BOM work.
+
+Do not combine this mode with `--request`, positional command arguments,
+`-i` or `--stdin-file -`. `--stdin-file FILE` is replayed for each command;
+env/workdir apply to all commands, and timeout applies to the whole batch.
+Output files concatenate command bytes in order. Each exec line is a new
+process in the same instance; each run line is a new disposable helper, so
+helper filesystem changes do not carry over. For pure SQL, pass the file
+through `--stdin-file script.sql -- psql -v ON_ERROR_STOP=1` instead.
 
 ## Build and push
 

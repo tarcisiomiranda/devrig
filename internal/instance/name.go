@@ -16,6 +16,7 @@ const (
 	LabelImage   = "devrig.image"
 	LabelPass    = "devrig.password"
 	LabelEngine  = "devrig.engine"
+	LabelKind    = "devrig.kind"
 
 	LabelContainerPort = "devrig.container_port"
 

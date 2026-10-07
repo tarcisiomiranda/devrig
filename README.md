@@ -138,6 +138,10 @@ devrig status <name>       # JSON status
 devrig list                # every managed instance
 devrig logs <name> [--tail N]
 devrig down <name>         # idempotent
+devrig exec <name> [--request FILE] [--stdin-file FILE] -- COMMAND [ARG...]
+devrig run IMAGE [--connect NAME] [--request FILE] [--stdin-file FILE] -- COMMAND [ARG...]
+devrig exec <name> --commands-file FILE.txt
+devrig run IMAGE [--connect NAME] --commands-file FILE.txt
 devrig version
 devrig build [ctx] -t IMG [-t IMG]... [-f FILE] [--platform P] [--build-arg K=V] [--target T] [--no-cache] [--push]
 devrig push IMG [IMG...] [--env-file F] [--no-login] [--tool podman|docker|auto]
@@ -181,6 +185,152 @@ recreated. If the configuration differs, the old container is replaced.
   TLS, and several drivers refuse to connect unless told so explicitly.
 - **`--timeout` defaults to the backend**: 30s on Docker, 3m on Kubernetes,
   where a cold node may still be pulling the image.
+
+## Execute commands and helper images
+
+Choose the input option by the file's contents:
+
+| Input | Option | Behavior |
+| --- | --- | --- |
+| One executable command per TXT line | `--commands-file commands.txt` | Runs commands in order and stops on the first failure |
+| Complex arguments, environment or multiline input in JSON | `--request request.json` | Passes `argv`, env and stdin as structured data |
+| SQL statements in a TXT or SQL file | `--stdin-file commands.txt -- psql -v ON_ERROR_STOP=1` | Sends the entire file to one Postgres client |
+
+The option determines how the file is interpreted; the extension does not.
+
+`exec` runs inside an existing managed instance, on Docker or Kubernetes.
+It resolves the instance by its ownership labels, including legacy `testpg`
+labels, and sets the engine's client connection environment from its actual
+configuration. For Postgres this includes `PGHOST=127.0.0.1`, the container
+port, user, password, database and `PGSSLMODE=disable`. Explicit `--env` values
+override these defaults.
+
+```bash
+devrig exec myapp -- psql -At -c 'SELECT 1'
+devrig exec myapp --stdin-file migration.sql -- psql -v ON_ERROR_STOP=1
+```
+
+`run` starts a helper image on Docker, waits for its command and removes the
+container, including on command failure, interruption or timeout. It labels
+the helper as managed and removes only the exact container it created; it
+never replaces a container whose name is already in use. `--name` is optional
+and defaults to a unique name. No ports are published. Without a command,
+the image's default entrypoint and command are used; with a command, its first
+argument replaces the entrypoint and the rest are passed as its arguments.
+
+`--connect` resolves a running managed instance, shares its network and sets
+its engine's client connection environment. This lets a backup image reach
+the database over loopback without hardcoding a generated container name or
+host port:
+
+```bash
+devrig run cyber-gcd-acme-dns-backup:0.3.0-local --stdin-file .build/dns-fixture.dump -- pg_restore --list
+devrig run cyber-gcd-acme-dns-backup:0.3.0-local --connect gcd-dns-restore-test --stdin-file .build/dns-fixture.dump -- pg_restore --exit-on-error --no-owner --no-acl --dbname=cyber_gcddns_restore
+```
+
+### Structured requests, without shell quoting
+
+Both commands accept `--request FILE` or `--request -` for a JSON object.
+Arguments are an `argv` array, environment overrides an `env` object, and
+stdin is either a `stdin` string or a `stdin_file` path. Arguments and stdin
+are passed directly; quotes, spaces, `$`, backticks, backslashes, semicolons,
+newlines and Unicode are preserved without shell expansion. The program
+receiving the arguments still applies its own syntax, such as SQL or regular
+expressions. A shell runs only when explicitly included in `argv`.
+
+For example, save this as `.build/restore.json` next to `dns-fixture.dump`:
+
+```json
+{
+  "connect": "gcd-dns-restore-test",
+  "argv": [
+    "pg_restore",
+    "--exit-on-error",
+    "--no-owner",
+    "--no-acl",
+    "--dbname=cyber_gcddns_restore"
+  ],
+  "stdin_file": "dns-fixture.dump"
+}
+```
+
+```bash
+devrig run cyber-gcd-acme-dns-backup:0.3.0-local --request .build/restore.json
+```
+
+The request also accepts `workdir`, `stdout_file`, `stderr_file`, and, for
+`run`, `name` and `connect`. File paths in a request are relative to the
+request file; paths supplied through flags are relative to the current
+directory. Flags override corresponding request fields and `--env KEY=VALUE`
+is repeatable, preserving commas and additional `=` characters. Supplying
+both positional arguments and request `argv`, multiple stdin sources, unknown
+fields or trailing JSON is an error. Argument and environment values cannot
+contain NUL bytes; stdin files may contain arbitrary binary data.
+
+The JSON result contains `exit_code`, `stdout` and `stderr`. A nonzero command
+exit code is also the CLI exit code, while its output remains available in
+JSON. Invalid UTF-8 output is returned losslessly as `stdout_base64` or
+`stderr_base64`, with the corresponding text field empty. For large or binary
+output, use `--stdout-file`/`--stderr-file` (or request fields); bytes are
+streamed to new files with mode `0600`, their paths are returned in JSON, and
+existing files are never overwritten. Output files can contain partial data
+if a command fails. Requests and environment values are not echoed in the
+result; the command's own output is returned as produced.
+
+`-i` or `--stdin-file -` reads command stdin from the calling process without
+a TTY. It cannot be combined with `--request -`; use request `stdin` or a file
+instead. `--timeout` defaults to no time limit for `exec` and `run`. Cancelling
+`run` removes its helper; cancelling `exec` closes the attachment, but the
+process inside the existing instance may continue running. `run` and
+`exec --workdir` are currently Docker-only and fail explicitly on Kubernetes.
+Kubernetes `exec` requires `create pods/exec` permission and the `env` program
+inside the image (present in the supported Postgres images).
+
+### Command lists in TXT
+
+`--commands-file FILE` reads a UTF-8 text file with one command per line.
+For example, `commands.txt`:
+
+```text
+# Inspect the database
+psql -At -c "SELECT current_database()"
+psql -At -c "SELECT 'literal $HOME'"
+```
+
+```bash
+devrig exec myapp --commands-file commands.txt
+devrig run postgres:16-alpine --connect myapp --commands-file commands.txt
+```
+
+The whole file is parsed before any command runs. Commands execute in order
+and stop at the first nonzero exit or execution error. JSON contains the
+overall `exit_code`, `total` command count and a `results` array with the
+physical `line` number and stdout/stderr/exit_code for each attempted command.
+Earlier results are preserved if a later command fails.
+
+Blank lines and unquoted `#` comments at a word boundary are ignored. Single
+and double quotes group arguments, including empty arguments. A backslash
+escapes the next character outside quotes; inside double quotes it escapes
+`$`, backticks, `"` and `\`, and remains literal before other characters.
+Variables, substitutions, backticks and globs are not expanded. Unquoted
+`;`, `|`, `&`, `<` and `>` are rejected; invoke a shell explicitly with its
+script as a quoted argument if shell behavior is intended. Commands must fit
+on one physical line; use JSON requests or stdin files for multiline input.
+CRLF and a leading UTF-8 BOM are supported.
+
+Use `--commands-file -` to read the list from stdin. This mode cannot be
+combined with `--request`, positional command arguments, `-i` or
+`--stdin-file -`. A regular `--stdin-file FILE` is reopened and supplied to
+each command. Common `--env`/`--workdir` settings apply to every command, and
+`--timeout` limits the entire batch. Output files receive concatenated bytes
+in execution order, while JSON contains a separate result for each command.
+
+Each `exec` line starts a separate process inside the same existing instance.
+Each `run` line gets a separate helper container, removed before the next
+line; helper filesystem changes do not carry over. Database changes made via
+`--connect` do persist in the target instance. For a file containing SQL
+statements rather than executable commands, use
+`devrig exec myapp --stdin-file script.sql -- psql -v ON_ERROR_STOP=1`.
 
 ## Build and push
 

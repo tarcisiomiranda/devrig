@@ -33,6 +33,9 @@ macOS only.
 | `internal/image/` | build/push/login through the podman or docker CLI; tool selection, credential keys |
 | `internal/envfile/` | reads `.env`/JSON/YAML/TOML through confctl (no native parser) |
 | `cmd/image.go` | `build`, `push`, `login` commands, `--tool`, env-file sources |
+| `cmd/command.go` | `exec`/`run`, structured JSON requests, stdin and output files |
+| `cmd/command_file.go` | TXT command lists, argument splitting, sequential batch results |
+| `internal/rig/command.go` | command capability contract, argv/env validation, JSON results |
 | `internal/instance/` | name validation, labels, container naming |
 | `internal/wait/` | readiness: TCP accept **and** a real query |
 | `internal/out/` | JSON stdout, fatal errors to stderr |
@@ -60,6 +63,18 @@ MySQL and MariaDB are declared with `Implemented: false` and fail with a clear
 - `down` on a missing instance succeeds (`removed: false, state: absent`).
 - Every command emits JSON except `url`, which prints a bare string so
   `$(devrig url x)` works in a shell.
+- `exec`/`run` pass argv and stdin directly, without an implicit shell. Preserve
+  empty arguments, quotes, newlines, Unicode and binary stdin/output files.
+- `exec` works on Docker and kube; `run` and `exec --workdir` are Docker-only.
+  Unsupported combinations fail explicitly. Client connection env belongs
+  to the engine spec, and explicit env values override it.
+- `run` labels its helper and removes only the exact container it created,
+  including on failure/cancellation. Never replace an existing name for `run`.
+- Command failure still emits stdout/stderr/exit_code JSON and exits with the
+  command's code. Output files are exclusive, mode 0600, never overwritten.
+- `--commands-file` validates the entire UTF-8 list before execution, preserves
+  quoted/empty arguments without shell expansion, runs in order and stops on
+  the first failure. Batch JSON retains per-command results and line numbers.
 - Legacy `testpg` containers stay listable and removable, with their **real**
   labels read (never guess the database name from the instance name).
 - Tool auto-detection is podman, then docker. `--tool`/`DEVRIG_TOOL` pin one.

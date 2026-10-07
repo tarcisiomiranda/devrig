@@ -72,3 +72,12 @@ the installer so tool-specific copies stay in sync.
 - Setting `TEST_DATABASE_URL`
 - Replacing ad-hoc `docker run postgres`
 - Cleaning up throwaway containers (`devrig down` / `devrig list`)
+- Executing commands inside managed Docker containers or Kubernetes pods
+- Running disposable helper images, including dump validation and restore
+- Executing TXT command lists with `--commands-file`, stopping on failure
+- Passing complex argv/env/stdin with JSON requests, or SQL/dumps via stdin files
+
+Command lists and SQL files use different options: `--commands-file` reads
+one executable command per line; `--stdin-file` sends the whole file to a
+single program such as `psql`. The filename extension does not select the
+mode. See the [command input guide](../README.md#execute-commands-and-helper-images).

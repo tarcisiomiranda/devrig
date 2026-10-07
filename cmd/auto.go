@@ -50,6 +50,38 @@ func (a *autoBackend) Up(ctx context.Context, opt rig.UpOptions) (*rig.Status, e
 	return a.primary.Up(ctx, opt)
 }
 
+func (a *autoBackend) Exec(ctx context.Context, name string, opt rig.CommandOptions) (*rig.CommandResult, error) {
+	primary, ok := a.primary.(rig.CommandBackend)
+	if !ok {
+		return nil, fmt.Errorf("backend %s does not support exec", a.primary.Kind())
+	}
+	res, err := primary.Exec(ctx, name, opt)
+	if rig.IsNotFound(err) {
+		if other := a.secondary(ctx); other != nil {
+			if commands, ok := other.(rig.CommandBackend); ok {
+				return commands.Exec(ctx, name, opt)
+			}
+		}
+	}
+	return res, err
+}
+
+func (a *autoBackend) Run(ctx context.Context, opt rig.RunOptions) (*rig.CommandResult, error) {
+	primary, ok := a.primary.(rig.CommandBackend)
+	if !ok {
+		return nil, fmt.Errorf("backend %s does not support run", a.primary.Kind())
+	}
+	res, err := primary.Run(ctx, opt)
+	if opt.Connect != "" && rig.IsNotFound(err) {
+		if other := a.secondary(ctx); other != nil {
+			if commands, ok := other.(rig.CommandBackend); ok {
+				return commands.Run(ctx, opt)
+			}
+		}
+	}
+	return res, err
+}
+
 func (a *autoBackend) Status(ctx context.Context, name string) (*rig.Status, error) {
 	st, err := a.primary.Status(ctx, name)
 	if !rig.IsNotFound(err) {

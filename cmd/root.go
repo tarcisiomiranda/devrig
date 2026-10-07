@@ -43,6 +43,10 @@ func SetVersion(v string) {
 // Execute runs the root command.
 func Execute() error {
 	if err := rootCmd.Execute(); err != nil {
+		var exit *rig.ExitError
+		if errors.As(err, &exit) {
+			return err
+		}
 		fmt.Fprintf(os.Stderr, "devrig: %v\nTry 'devrig --help'.\n", err)
 		return err
 	}
@@ -72,6 +76,8 @@ func init() {
 	rootCmd.AddCommand(urlCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(newCommand(false, selectBackend))
+	rootCmd.AddCommand(newCommand(true, selectBackend))
 
 	rootCmd.PersistentFlags().StringVar(&flagBackend, "backend", "",
 		"where instances run: docker, kube or auto (default: $DEVRIG_BACKEND, else auto)")

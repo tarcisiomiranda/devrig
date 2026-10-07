@@ -394,6 +394,13 @@ func label(sum *container.Summary, key, legacy string) string {
 
 func (c *Client) statusFromSummary(ctx context.Context, sum *container.Summary, probeReady bool) (*Status, error) {
 	name := label(sum, instance.LabelName, instance.LegacyLabelName)
+	if sum.Labels[instance.LabelKind] == "run" {
+		st := &Status{Name: name, Backend: "docker", ContainerID: shortID(sum.ID), ContainerName: instance.ContainerName(name), State: sum.State, Image: sum.Image}
+		if len(sum.Names) > 0 {
+			st.ContainerName = strings.TrimPrefix(sum.Names[0], "/")
+		}
+		return st, nil
+	}
 	spec := engine.Default()
 	if e := sum.Labels[instance.LabelEngine]; e != "" {
 		if s, err := engine.Lookup(e); err == nil {
