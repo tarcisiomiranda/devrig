@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	appVersion = "0.3.0"
+	appVersion = "0.5.0"
 
 	flagPort          int
 	flagContainerPort int

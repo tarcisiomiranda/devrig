@@ -1,0 +1,21 @@
+tag: v0.5.0
+previous: v0.4.0
+
+highlights: |
+  Execute commands through devrig without assembling shell strings or reaching
+  for ad-hoc docker run calls. Run a command inside a managed instance, launch
+  a disposable helper image, or execute a prevalidated TXT command list.
+
+features:
+  - "**`devrig exec <name> -- <command> [args...]`** runs directly inside a managed Docker container or Kubernetes pod, with structured stdout, stderr and exit_code results."
+  - "**`devrig run <image> -- <command> [args...]`** launches a Docker helper and removes the exact container it created, including after failures or cancellation. `--connect <name>` shares a managed instance's network and supplies the engine's client connection environment."
+  - "**`--request FILE|-`** accepts a strict JSON request with an argv array, environment values and stdin/output file paths. Empty arguments, quotes, newlines and Unicode are passed without an implicit shell; stdin and output files preserve binary data."
+  - "**`--commands-file FILE|-`** executes a UTF-8 TXT list in order, reports each command's source line, and stops on the first failure. The entire list is validated before execution; quoted arguments, escapes, blank lines and comments are supported without shell expansion."
+  - "**`--stdin-file`, `--stdout-file` and `--stderr-file`** support file-based command I/O. Output files are created exclusively with mode 0600 and never overwrite existing files."
+
+changes:
+  - "Command failures still emit JSON results and propagate the command's exit code to the CLI. Explicit environment values override engine connection defaults."
+  - "`run` and `exec --workdir` are Docker-only; unsupported Kubernetes combinations fail explicitly. Each TXT `exec` line is a separate process, and each TXT `run` line uses a fresh helper."
+  - "README and shipped agent skills explain direct argv, JSON requests, TXT command lists and SQL/binary stdin, including how to choose the appropriate input format."
+  - "Unit tests cover command parsing, backend validation, ownership and cleanup. A Docker integration test covers dump/restore, argument and binary I/O preservation, command failure and timeout cleanup."
+  - "Default version strings now report 0.5.0 for builds without linker overrides; release binaries continue to use the exact Git tag."
