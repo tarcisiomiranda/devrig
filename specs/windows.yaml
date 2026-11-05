@@ -1,0 +1,34 @@
+domain: windows
+summary: "Windows Docker Desktop basic support"
+last_updated: "2026-11-04"
+status: implemented
+behavior:
+  - "Native x64 devrig.exe distributed as devrig_windows_amd64.exe with a PowerShell installer."
+  - "Windows auto mode selects Docker only; an explicit Kubernetes backend fails before invoking kubectl or creating resources."
+  - "Docker SDK uses its Windows named pipe by default and preserves DOCKER_HOST overrides; only a Linux engine is accepted."
+  - "Postgres up/url/status/list/logs/down retain loopback binding, readiness and managed-label cleanup."
+installer:
+  path: install.ps1
+  default_directory: "%LOCALAPPDATA%/Programs/devrig/bin"
+  parameters: [Version, InstallDir, SourceDir, ReleaseBaseUrl, NoPath]
+  offline: "package:windows creates a ZIP; SourceDir installs its checksum-verified executable without network access."
+  integrity: "Exactly one SHA-256 entry matching the selected executable is required before replacement."
+  update: "Stage in the destination filesystem and replace atomically; a failed update preserves the existing executable."
+  path_update: "Add the destination to the user and current PATH unless NoPath is selected; preserve existing entries."
+out_of_scope:
+  - "Windows Kubernetes lifecycle, native Windows containers and ARM64 certification."
+  - "Implementing other database engines or adding mandatory Docker CLI dependency."
+validation:
+  - "Native build and isolated executable smoke on Windows."
+  - "Installer tests against an HTTP release fixture: latest, version, Unicode/spaces, replacement and checksum failures."
+  - "Publisher checksums require the Windows executable alongside existing Unix binaries."
+implemented:
+  - "Windows x64 executable, per-user PowerShell installer and offline ZIP generation."
+  - "Native unit suite, executable smoke, eight installer scenarios and release publisher checks passed."
+  - "Actual ZIP extraction, SHA-256 verification and offline installation into a Unicode path passed."
+pending: []
+verification:
+  host: "Windows x64, Windows PowerShell 5.1, Python 3.12.16, mise 2026.11.1."
+  go: "1.25.14"
+  unix: "Linux amd64 test binary cross-compiled successfully; not executed on this Windows host."
+  live_docker_desktop: "Nao executado: Docker Desktop nao esta instalado; transporte Windows foi validado com servidor named pipe simulado."

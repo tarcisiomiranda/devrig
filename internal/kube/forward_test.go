@@ -12,9 +12,9 @@ import (
 
 func deadPID(t *testing.T) int {
 	t.Helper()
-	cmd := exec.Command("true")
+	cmd := exec.Command(os.Args[0], "-test.run=^$")
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("run true: %v", err)
+		t.Fatalf("run helper: %v", err)
 	}
 	return cmd.Process.Pid
 }
@@ -111,7 +111,7 @@ func TestStopForwardForgetsTheInstance(t *testing.T) {
 func TestStateDirHonoursXDG(t *testing.T) {
 	t.Setenv("DEVRIG_STATE_DIR", "")
 	t.Setenv("XDG_STATE_HOME", "/tmp/xdg-state")
-	if got := StateDir(); got != "/tmp/xdg-state/devrig" {
+	if got := StateDir(); got != filepath.Join("/tmp/xdg-state", "devrig") {
 		t.Fatalf("StateDir = %q", got)
 	}
 }

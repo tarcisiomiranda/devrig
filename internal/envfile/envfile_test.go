@@ -3,8 +3,10 @@ package envfile
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -114,11 +116,12 @@ func TestReadPropagatesRunnerErrors(t *testing.T) {
 // confctl's stdout is the parsed secret map by construction; it must never
 // reach an error string even when confctl exits non-zero with empty stderr.
 func TestExecRunnerNeverEchoesStdoutIntoErrors(t *testing.T) {
-	r, err := NewRunner("testdata/confctl-fails-with-stdout.sh")
+	t.Setenv("DEVRIG_TEST_CONFCTL", "stdout")
+	r, err := NewRunner(os.Args[0])
 	if err != nil {
 		t.Fatalf("NewRunner: %v", err)
 	}
-	_, err = r.Run(context.Background(), "-c", "x")
+	_, err = r.Run(context.Background(), "-test.run=^TestConfctlHelperProcess$")
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -130,11 +133,12 @@ func TestExecRunnerNeverEchoesStdoutIntoErrors(t *testing.T) {
 // The stderr path must stay covered: a real failure message still reaches
 // the user.
 func TestExecRunnerKeepsStderrInErrors(t *testing.T) {
-	r, err := NewRunner("testdata/confctl-fails-with-stderr.sh")
+	t.Setenv("DEVRIG_TEST_CONFCTL", "stderr")
+	r, err := NewRunner(os.Args[0])
 	if err != nil {
 		t.Fatalf("NewRunner: %v", err)
 	}
-	_, err = r.Run(context.Background(), "-c", "x")
+	_, err = r.Run(context.Background(), "-test.run=^TestConfctlHelperProcess$")
 	if err == nil || !strings.Contains(err.Error(), "bad thing") {
 		t.Fatalf("err = %v, want it to contain stderr's \"bad thing\"", err)
 	}
@@ -146,7 +150,22 @@ func TestNewRunnerMissingBinaryCarriesInstallHint(t *testing.T) {
 	if !errors.As(err, &missing) {
 		t.Fatalf("err = %v, want MissingBinaryError", err)
 	}
-	if !strings.Contains(err.Error(), InstallHint) || !strings.Contains(err.Error(), "--no-login") {
+	hint := InstallHint
+	if runtime.GOOS == "windows" {
+		hint = "install.ps1"
+	}
+	if !strings.Contains(err.Error(), hint) || !strings.Contains(err.Error(), "--no-login") {
 		t.Fatalf("error must carry the installer and the --no-login escape: %v", err)
+	}
+}
+
+func TestConfctlHelperProcess(t *testing.T) {
+	switch os.Getenv("DEVRIG_TEST_CONFCTL") {
+	case "stdout":
+		fmt.Fprintln(os.Stdout, "leaked-token-value")
+		os.Exit(1)
+	case "stderr":
+		fmt.Fprintln(os.Stderr, "bad thing")
+		os.Exit(1)
 	}
 }

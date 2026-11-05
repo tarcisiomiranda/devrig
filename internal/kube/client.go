@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +32,9 @@ type Client struct {
 
 // New verifies kubectl can reach a cluster and resolves context and namespace.
 func New(ctx context.Context, opt Options) (*Client, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("the kube backend is not supported on Windows; use Docker Desktop with Linux containers")
+	}
 	r, err := newExecRunner(opt)
 	if err != nil {
 		return nil, err

@@ -15,11 +15,7 @@ shellcheck = "0.11"
 
 [tasks.build]
 description = "Build devrig into ./bin/devrig"
-run = """
-set -eu
-mkdir -p bin
-go build -trimpath -ldflags="-s -w -X main.version=$(git describe --tags --always --dirty)" -o bin/devrig .
-"""
+run = "python scripts/build.py"
 
 [tasks.install]
 description = "Install devrig to ~/.local/bin (plus the testpg compatibility link)"
@@ -80,7 +76,24 @@ ls -lh dist
 
 [tasks."release:check"]
 description = "Validate the GitHub release script"
-run = "python -m py_compile .github/scripts/release.py .github/scripts/test_release.py && python -m unittest discover -s .github/scripts -p 'test_*.py' && python .github/scripts/release.py --validate-tag v0.0.0"
+run = ["python -m unittest discover -s .github/scripts -p test_*.py", "python .github/scripts/release.py --validate-tag v0.0.0"]
+
+[tasks."test:installer:windows"]
+description = "Test the PowerShell installer against a local release fixture"
+run = "python -m unittest discover -s scripts -p test_windows_installer.py"
+
+[tasks."test:windows:smoke"]
+description = "Smoke the native Windows CLI without requiring Docker"
+run = "python scripts/smoke_windows.py"
+
+[tasks."package:windows"]
+description = "Build a portable Windows ZIP with executable, offline installer and SHA-256"
+depends = ["build"]
+run = "python scripts/package_windows.py"
+
+[tasks."test:windows:docker"]
+description = "Smoke a disposable Postgres lifecycle on Docker Desktop with Linux containers"
+run = "python scripts/smoke_windows.py --docker"
 
 [tasks."lint:shell"]
 description = "Lint shell scripts"

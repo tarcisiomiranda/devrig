@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -157,7 +158,7 @@ func TestRunRequestUsesPathsRelativeToRequestAndStreamsBinary(t *testing.T) {
 	if !bytes.Equal(output, input) || result.Stdout != "" || backend.runOpt.Image != "backup-image" || backend.runOpt.Connect != "database" || backend.runOpt.Name != "validate" {
 		t.Fatalf("output = %v, result = %+v, run = %+v", output, result, backend.runOpt)
 	}
-	if info, err := os.Stat(result.StdoutFile); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(result.StdoutFile); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("output permissions: info = %v, err = %v", info, err)
 	}
 	_, _, err = executeCommand(t, true, backend, "", "backup-image", "--request", path)

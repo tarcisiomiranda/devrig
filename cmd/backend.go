@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -82,6 +83,12 @@ func selectBackend(ctx context.Context) (rig.Backend, error) {
 	}
 	if kind == rig.KindAuto && kubeFlagsGiven() {
 		kind = rig.KindKube
+	}
+	if runtime.GOOS == "windows" {
+		if kind == rig.KindKube {
+			return nil, fmt.Errorf("the kube backend is not supported on Windows; use Docker Desktop with Linux containers")
+		}
+		kind = rig.KindDocker
 	}
 	switch kind {
 	case rig.KindDocker:

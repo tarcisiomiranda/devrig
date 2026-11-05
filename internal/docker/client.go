@@ -28,13 +28,28 @@ type Client struct {
 
 // New creates a Docker client from the environment (DOCKER_HOST, etc.).
 func New(ctx context.Context) (*Client, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	return newClient(ctx, runtime.GOOS, client.FromEnv, client.WithAPIVersionNegotiation())
+}
+
+func newClient(ctx context.Context, hostOS string, options ...client.Opt) (*Client, error) {
+	cli, err := client.NewClientWithOpts(options...)
 	if err != nil {
 		return nil, fmt.Errorf("docker client: %w\n%s", err, dockerHint())
 	}
 	if _, err := cli.Ping(ctx); err != nil {
 		_ = cli.Close()
 		return nil, fmt.Errorf("docker not reachable: %w\n%s", err, dockerHint())
+	}
+	if hostOS == "windows" {
+		info, err := cli.Info(ctx)
+		if err != nil {
+			_ = cli.Close()
+			return nil, fmt.Errorf("inspect Docker engine: %w\n%s", err, dockerHint())
+		}
+		if info.OSType != "linux" {
+			_ = cli.Close()
+			return nil, fmt.Errorf("Docker Desktop must use Linux containers; engine reports OS %q", info.OSType)
+		}
 	}
 	return &Client{cli: cli}, nil
 }
@@ -48,6 +63,8 @@ func (c *Client) Close() error {
 
 func dockerHint() string {
 	switch runtime.GOOS {
+	case "windows":
+		return "hint: start Docker Desktop and switch to Linux containers; check DOCKER_HOST or the default npipe:////./pipe/docker_engine (no TCP exposure is required)"
 	case "darwin":
 		return "hint: start Docker Desktop, OrbStack, or Colima; check DOCKER_HOST and `docker info`"
 	case "linux":

@@ -24,6 +24,7 @@ TAG_PATTERN = re.compile(
 )
 # Names must match install.sh: BINARY_os_arch (underscores, from uname).
 EXPECTED_BINARIES = {
+    "devrig_windows_amd64.exe",
     "devrig_darwin_amd64",
     "devrig_darwin_arm64",
     "devrig_linux_amd64",

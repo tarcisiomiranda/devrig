@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -51,10 +52,14 @@ type MissingBinaryError struct {
 }
 
 func (e *MissingBinaryError) Error() string {
+	installHint := InstallHint
+	if runtime.GOOS == "windows" {
+		installHint = "download confctl-windows-amd64.exe from https://github.com/tarcisiomiranda/confctl/releases or use that repository's install.ps1"
+	}
 	return fmt.Sprintf("%s not found in PATH (needed to read the env file): %v\n"+
 		"hint: %s\n"+
 		"      or set DEVRIG_CONFCTL, or pass --no-login to push without credentials",
-		e.Binary, e.Err, InstallHint)
+		e.Binary, e.Err, installHint)
 }
 
 func (e *MissingBinaryError) Unwrap() error { return e.Err }

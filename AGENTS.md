@@ -4,7 +4,8 @@ Go CLI that runs disposable development dependencies as containers through the
 Docker Engine API or as Kubernetes pods through kubectl, and builds and pushes
 images through the podman or docker CLI. Postgres today; the architecture is
 meant to take other resources without reshaping the Docker layer. Linux and
-macOS only.
+macOS, plus native Windows x64 for Docker Desktop with Linux containers. The
+Kubernetes backend remains Unix-only and must fail before cluster access on Windows.
 
 ## Absolute rules
 
@@ -71,7 +72,8 @@ MySQL and MariaDB are declared with `Implemented: false` and fail with a clear
 - `run` labels its helper and removes only the exact container it created,
   including on failure/cancellation. Never replace an existing name for `run`.
 - Command failure still emits stdout/stderr/exit_code JSON and exits with the
-  command's code. Output files are exclusive, mode 0600, never overwritten.
+  command's code. Output files are exclusive and never overwritten; mode 0600
+  applies on Unix and Windows uses the containing directory's ACL inheritance.
 - `--commands-file` validates the entire UTF-8 list before execution, preserves
   quoted/empty arguments without shell expansion, runs in order and stops on
   the first failure. Batch JSON retains per-command results and line numbers.

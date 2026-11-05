@@ -34,6 +34,57 @@ Today it runs Postgres. The point of the name is that it is not limited to one
 kind of resource: MySQL and MariaDB are next, and other dev dependencies
 (caches, brokers, object storage) fit the same shape. See [TODO.md](TODO.md).
 
+## Windows x64
+
+Windows releases include `devrig_windows_amd64.exe`, a portable executable. Rename it to
+`devrig.exe` to use it directly, or install a released version with PowerShell:
+
+```powershell
+Invoke-RestMethod https://raw.githubusercontent.com/tarcisiomiranda/devrig/main/install.ps1 | Invoke-Expression
+```
+
+The installer verifies SHA-256 before replacing a binary, installs into
+`%LOCALAPPDATA%\Programs\devrig\bin`, and adds that directory to the user PATH.
+Open a new terminal after installation. Administrator access, Bash and WSL are
+not required for the CLI. PowerShell 5.1 or later is supported.
+Use `-Version vX.Y.Z` to select a release containing the Windows executable,
+`-InstallDir` to choose a directory, or `-NoPath` to leave PATH unchanged.
+A failed checksum or an executable locked by another process preserves the
+previous installation; close the process before retrying an update.
+
+From a checkout, `mise run build` produces `bin/devrig.exe`.
+`mise run test:installer:windows` tests the installer against local HTTP fixtures,
+and `mise run test:windows:smoke` checks the native executable.
+The installer downloads release assets; a locally built executable can be used
+before the first Windows release is published.
+
+`mise run package:windows` creates a ZIP containing the executable, checksum
+and installer. After extracting it, install offline with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -SourceDir .
+```
+
+On Windows, the supported backend is Docker Desktop with **Linux containers**.
+The CLI uses the Docker SDK's local named pipe and respects an explicit
+`DOCKER_HOST`; opening a Docker TCP port is unnecessary. Auto mode stays on
+Docker, and Kubernetes options fail before contacting a cluster.
+
+```powershell
+try {
+    devrig up postgres --name myapp --backend docker
+    if ($LASTEXITCODE -ne 0) { throw 'Could not start Postgres' }
+    $env:TEST_DATABASE_URL = devrig url myapp
+    devrig status myapp
+} finally {
+    devrig down myapp --backend docker
+}
+```
+
+With Docker Desktop running, `mise run test:windows:docker` checks an actual
+Postgres lifecycle. The ordinary Windows smoke test does not create containers.
+Windows Kubernetes support and Windows containers are outside this release.
+
 ## Backends
 
 | Backend | How it runs | Requirements |
@@ -41,13 +92,13 @@ kind of resource: MySQL and MariaDB are next, and other dev dependencies
 | `docker` | container through the Docker Engine API | Docker Desktop, OrbStack, Colima or a Linux daemon |
 | `kube` | pod plus a detached `kubectl port-forward` | `kubectl` pointing at a cluster, permission to create pods and `pods/portforward` |
 
-Without `--backend`, devrig uses Docker when the daemon answers and falls back
+On Linux and macOS, without `--backend`, devrig uses Docker when the daemon answers and falls back
 to Kubernetes — so the same script works on a laptop and on a k3s or GKE box
 that has nothing but kubectl. `--namespace`, `--context`, `--kubeconfig`,
 `--cpu` or `--memory` on their own already select the kube backend, and
 `DEVRIG_BACKEND=kube` pins it for a whole shell.
 
-`up` always creates on one backend, but `url`, `status`, `logs`, `down` and
+On Linux and macOS, `up` always creates on one backend, but `url`, `status`, `logs`, `down` and
 `list` look on both, so a pod started with `--backend kube` is still found by a
 bare `devrig url <name>`.
 
@@ -385,6 +436,12 @@ installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tarcisiomiranda/confctl/main/install.sh | bash
+```
+
+On Windows, install the dependency with PowerShell:
+
+```powershell
+Invoke-RestMethod https://raw.githubusercontent.com/tarcisiomiranda/confctl/main/install.ps1 | Invoke-Expression
 ```
 
 | Variable | Effect |
