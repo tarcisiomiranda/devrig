@@ -31,16 +31,77 @@ a bare connection string for shell substitution.
 
 ## The loop
 
+For test-only dependencies, run setup, tests and cleanup in **one Bash
+invocation**. Replace `uv run pytest -q` with the project's test command:
+
 ```bash
-devrig up postgres --name <name> --db <database>   # create or reuse, waits until ready
-export TEST_DATABASE_URL="$(devrig url <name>)"
-# … run the tests …
-devrig down <name>                                 # idempotent
+(
+  set -euo pipefail
+  devrig_name="myapi-$(date +%s)-$$-$RANDOM"
+  devrig_scope=(--backend docker)
+
+  cleanup_devrig() {
+    devrig_result=$?
+    trap - EXIT
+    if devrig down "$devrig_name" "${devrig_scope[@]}"; then
+      exit "$devrig_result"
+    else
+      devrig_cleanup_result=$?
+      printf 'Cleanup failed for devrig instance %s\n' "$devrig_name" >&2
+      if [ "$devrig_result" -ne 0 ]; then
+        exit "$devrig_result"
+      fi
+      exit "$devrig_cleanup_result"
+    fi
+  }
+
+  trap cleanup_devrig EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  devrig up postgres --name "$devrig_name" --db myapi_test "${devrig_scope[@]}"
+  TEST_DATABASE_URL="$(devrig url "$devrig_name" "${devrig_scope[@]}")"
+  export TEST_DATABASE_URL
+  uv run pytest -q
+)
 ```
 
 The **resource comes first**; `--name` is the instance. `devrig up postgres`
-alone starts one named `postgres`. Name it after the project or task so parallel
-work does not collide.
+alone starts one named `postgres`. For tests, use a short project/task prefix
+and a unique run suffix so parallel sessions do not reuse each other's database.
+
+## Lifetime and cleanup
+
+`up` leaves the database running after the CLI exits. It has **no session-end
+hook, TTL or lease**: ending an agent/harness session does not call `down`.
+The automatic cleanup in `run` applies only to its helper container, never to
+the database supplied through `--connect`.
+
+- **Remove test instances owned by the task as soon as tests finish**, on
+  success or failure, and before the final response. Keep one running only
+  when the user requested continued use; report its name and exact `down`
+  command. Do not defer cleanup until the harness session closes.
+- **Install cleanup before `up`.** Use a trap as above, or a test fixture's
+  `finally`/teardown. A trap belongs to one shell invocation, not to the
+  conversation: it cannot protect later, separate tool calls. For a workflow
+  spanning tool calls, retain the exact instance names and backend settings
+  in task/handoff context and explicitly clean up on completion or failure.
+- **Clean only the task's own instances.** A managed label identifies devrig,
+  not the owning session. Do not remove pre-existing/shared instances or
+  sweep `devrig list`; choose a fresh name unless reuse was requested. Reuse
+  alone does not authorize deleting an instance owned by another workflow.
+- **Keep the same backend and Kubernetes scope for cleanup.** Record the
+  backend, namespace, context and kubeconfig used by `up`; pass the same
+  values to `url` and `down`, even if shell defaults change between calls.
+- **Verify cleanup and preserve failures.** Successful `down` reports
+  `state: absent`; `removed: false` also succeeds when already absent. Do
+  not mask test failures or suppress cleanup errors. If cleanup fails,
+  report the remaining name, scope and retry command in the final response.
+
+Traps cannot run after `SIGKILL`, a host crash, or if the harness never exits
+or signals that shell. Abrupt session loss needs an external lifecycle hook
+or a future lease/TTL mechanism; this skill cannot guarantee it.
 
 ## Backends
 
@@ -50,10 +111,12 @@ work does not collide.
 | `kube` | a pod plus a detached `kubectl port-forward` | k3s, GKE, any cluster where the only tool is kubectl |
 
 ```bash
-devrig up postgres --backend kube -n dev --name myapp
-export TEST_DATABASE_URL="$(devrig url myapp)"   # 127.0.0.1:<random>, through the tunnel
-devrig down myapp                                # deletes the pod and kills the tunnel
+devrig_scope=(--backend kube --namespace dev)
 ```
+
+Use that scope in the guarded loop above. Include `--context` and
+`--kubeconfig` when needed and retain their values for cleanup. The URL uses
+127.0.0.1 through the tunnel; `down` deletes the pod and stops the tunnel.
 
 Without `--backend`, devrig uses Docker when the daemon answers and falls back
 to kubectl. Read commands (`url`, `status`, `logs`, `down`) look on both, so a
@@ -69,8 +132,8 @@ the kube backend. `DEVRIG_BACKEND=kube` pins it for a whole shell.
 2. **Postgres DSNs need `?sslmode=disable`.** `devrig url` already includes it.
    If you ever build a local DSN by hand, keep it — drivers fail on a local
    server without TLS otherwise.
-3. **Prefer `down` (or a trap) when finished.** Leftover containers are visible
-   with `devrig list`.
+3. **Cleanup is part of the test run.** Follow the lifetime rules above;
+   `devrig list` shows managed instances, not permission to delete them all.
 4. **It only touches its own containers** (label `devrig.managed=1`, plus
    legacy `cyber.testpg=1`). Never `docker rm` unrelated containers to "clean up".
 5. **Docker must be running** (Docker Desktop, OrbStack, Colima, or a Linux
@@ -110,8 +173,9 @@ devrig push IMG [--env-file F] [--no-login]                    # logs in from .e
 devrig login [REGISTRY] [--user-key K] [--password-key K]      # never prints the token
 ```
 
-`up` reuses a running instance when the configuration matches, so calling it at
-the start of every test run is cheap and safe.
+`up` reuses a running instance when the configuration matches. Reuse the same
+name only within a workflow that owns its lifecycle or when the user requests
+it; independent test runs need distinct names.
 
 ## Commands inside instances and helper images
 
@@ -290,24 +354,12 @@ code and documentation.
 
 ## Example: tests on a server that only has kubectl
 
-```bash
-devrig up postgres --backend kube -n dev --name ci-check
-export TEST_DATABASE_URL="$(devrig url ci-check)"
-uv run pytest -q
-devrig down ci-check
-```
+Use the guarded test loop above with the kube scope and the target namespace.
+Keep `up`, URL lookup, tests and the cleanup trap in the same Bash invocation.
 
 The first `up` on a cold node waits for the image pull; the timeout defaults to
-3m there (30s on Docker) and `--timeout` overrides it.
-
-## Example: pytest with a real Postgres
-
-```bash
-devrig up postgres --name myapi --db myapi_test
-export TEST_DATABASE_URL="$(devrig url myapi)"
-uv run pytest -q
-devrig down myapi
-```
+3m there (30s on Docker) and `--timeout` overrides it. That timeout only bounds
+startup readiness; it does not expire the running database.
 
 Pre-v0.2.0 syntax (`devrig up myapi --engine postgres`) is gone; the CLI prints
 the replacement command if you try it.
